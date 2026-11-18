@@ -1,0 +1,50 @@
+{
+  "name": "agystatusline",
+  "version": "0.4.0",
+  "description": "Configurable status line for the Antigravity CLI (agy): widgets, colours, powerline blocks and multi-line layouts in settings.json.",
+  "keywords": [
+    "agy",
+    "antigravity",
+    "antigravity-cli",
+    "statusline",
+    "status-line",
+    "terminal",
+    "cli",
+    "gemini",
+    "powerline",
+    "tui"
+  ],
+  "type": "module",
+  "main": "src/render.js",
+  "exports": {
+    ".": "./src/render.js",
+    "./presets": "./src/presets.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "agystatusline": "bin/agystatusline.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "demo": "node bin/agystatusline.js --demo"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "author": "Cassius (何之洲)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cassius0924/agystatusline.git"
+  },
+  "homepage": "https://github.com/Cassius0924/agystatusline#readme",
+  "bugs": {
+    "url": "https://github.com/Cassius0924/agystatusline/issues"
+  }
+}
