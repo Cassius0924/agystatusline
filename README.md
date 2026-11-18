@@ -2,13 +2,13 @@
 
 [![CI](https://github.com/Cassius0924/agystatusline/actions/workflows/ci.yml/badge.svg)](https://github.com/Cassius0924/agystatusline/actions/workflows/ci.yml)
 [![Release](https://github.com/Cassius0924/agystatusline/actions/workflows/release.yml/badge.svg)](https://github.com/Cassius0924/agystatusline/actions/workflows/release.yml)
-[![npm](https://img.shields.io/npm/v/agystatusline.svg)](https://www.npmjs.com/package/agystatusline)
+[![npm](https://img.shields.io/npm/v/@cassius0924/agystatusline.svg)](https://www.npmjs.com/package/@cassius0924/agystatusline)
 
 Configurable status line for the [Antigravity CLI](https://antigravity.google/docs/cli/statusline) (`agy`) — widget rows defined in JSON, `ccstatusline`-style, zero dependencies.
 
 ```bash
-npx -y agystatusline init          # writes the config + wires agy's statusLine
-npx -y agystatusline preset powerline   # or: default | minimal | git
+npx -y @cassius0924/agystatusline init          # writes the config + wires agy's statusLine
+npx -y @cassius0924/agystatusline preset powerline   # or: default | minimal | git
 ```
 
 `init` refuses to replace an existing `statusLine` unless you pass `--force`; it backs `settings.json` up to `settings.json.agystatusline.bak` and runs a self-check through the same command it just wired.
