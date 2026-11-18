@@ -139,8 +139,17 @@ Not portable (agy's payload has no data for it): Claude usage API widgets (sessi
 2. `git tag -a vX.Y.Z -m …` and `git push --tags`.
 3. `gh release create vX.Y.Z --generate-notes`.
 
-`.github/workflows/release.yml` runs the tests, checks the tag matches `package.json`, and publishes with `--provenance`. It needs a repository secret `NPM_TOKEN` (granular token, *Read and write* → *Publish*); without it the workflow succeeds with a warning and publishes nothing.
+`.github/workflows/release.yml` runs the tests, checks the tag matches `package.json`, then publishes with `--provenance` through [trusted publishing](https://docs.npmjs.com/trusted-publishers): npm exchanges the GitHub OIDC token for a short-lived publish credential, so no secret is stored.
 
-Once the first version is on npm, switch the package to [trusted publishing](https://docs.npmjs.com/trusted-publishers) (npmjs.com → package → Settings → Trusted Publisher → GitHub Actions: `Cassius0924/agystatusline`, workflow `release.yml`) and delete the token — the workflow's `id-token: write` already supports it.
+Setup (once, on npmjs.com → package → Settings → Trusted Publisher → GitHub Actions):
+
+| field | value |
+| --- | --- |
+| Organization or user | `Cassius0924` |
+| Repository | `agystatusline` |
+| Workflow filename | `release.yml` |
+| Environment | *(leave empty)* |
+
+A repository secret `NPM_TOKEN` still works as a fallback for accounts without trusted publishing.
 
 MIT.

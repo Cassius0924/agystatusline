@@ -7,18 +7,16 @@ on:
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write # npm trusted publishing (OIDC) + provenance
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
 
       - run: npm test
@@ -33,14 +31,10 @@ jobs:
             exit 1
           fi
 
+      # Trusted publishing: npm exchanges the GitHub OIDC token for a short-lived
+      # publish credential, so no NPM_TOKEN secret is needed. NODE_AUTH_TOKEN is
+      # only set when a token secret exists, which keeps that fallback working.
       - name: Publish to npm
-        if: env.NPM_TOKEN != ''
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public
-
-      - name: Skipped
-        if: env.NPM_TOKEN == ''
-        run: |
-          echo "::warning::NPM_TOKEN secret is not set; skipping npm publish."
-          echo "Add a granular npm token (publish permission) as the NPM_TOKEN repository secret and re-run this workflow."
