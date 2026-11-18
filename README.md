@@ -1,5 +1,9 @@
 # agystatusline
 
+[![CI](https://github.com/Cassius0924/agystatusline/actions/workflows/ci.yml/badge.svg)](https://github.com/Cassius0924/agystatusline/actions/workflows/ci.yml)
+[![Release](https://github.com/Cassius0924/agystatusline/actions/workflows/release.yml/badge.svg)](https://github.com/Cassius0924/agystatusline/actions/workflows/release.yml)
+[![npm](https://img.shields.io/npm/v/agystatusline.svg)](https://www.npmjs.com/package/agystatusline)
+
 Configurable status line for the [Antigravity CLI](https://antigravity.google/docs/cli/statusline) (`agy`) — widget rows defined in JSON, `ccstatusline`-style, zero dependencies.
 
 ```bash
@@ -128,5 +132,15 @@ Run it with no arguments in a terminal (or `agystatusline edit`):
 Ported: multi-row widget config, the `ccstatusline` widget vocabulary, per-widget colours/labels, themes/gradients-in-theme-slots, powerline blocks with caps and column alignment, flex separator, minimalist mode, git cache TTL, reset timers, cache-hit-rate, the interactive `preset` previews, and a renderer with no dependencies.
 
 Not portable (agy's payload has no data for it): Claude usage API widgets (session/weekly per-model, spend limits, block forecasts), PR/CI widgets, transcript-derived metrics (output speed, cache misses, compaction), hook-driven widgets. Not implemented: per-widget gradients and per-project configs.
+
+## Releasing
+
+1. `npm version patch|minor` (or edit `package.json`), commit.
+2. `git tag -a vX.Y.Z -m …` and `git push --tags`.
+3. `gh release create vX.Y.Z --generate-notes`.
+
+`.github/workflows/release.yml` runs the tests, checks the tag matches `package.json`, and publishes with `--provenance`. It needs a repository secret `NPM_TOKEN` (granular token, *Read and write* → *Publish*); without it the workflow succeeds with a warning and publishes nothing.
+
+Once the first version is on npm, switch the package to [trusted publishing](https://docs.npmjs.com/trusted-publishers) (npmjs.com → package → Settings → Trusted Publisher → GitHub Actions: `Cassius0924/agystatusline`, workflow `release.yml`) and delete the token — the workflow's `id-token: write` already supports it.
 
 MIT.
