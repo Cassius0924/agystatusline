@@ -6,7 +6,7 @@ import { emitKeypressEvents } from "node:readline";
 import { WIDGETS, renderLines } from "./render.js";
 import { demoCtx } from "./demo.js";
 import { PRESETS, PRESET_NAMES } from "./presets.js";
-import { LANGUAGES, detectLang, translator } from "./i18n.js";
+import { LANGUAGES, detectLang, translator, widgetName } from "./i18n.js";
 
 const THEMES = ["aurora", "mono", "paper", null];
 export const SWATCHES = [
@@ -338,7 +338,7 @@ function detailRows(state) {
   const alone = renderLines({ ...state.config, lines: [[w]] }, ctx, { color: true, width: 120, now: ctx.now });
   const pad = (word) => word.padEnd(7);
   return [
-    `${DIM}${pad(tr("ui.type"))}${RESET} ${BOLD}${w.type}${RESET}`,
+    `${DIM}${pad(tr("ui.type"))}${RESET} ${BOLD}${widgetName(detectLang(state.config), w.type)}${RESET} ${DIM}${w.type}${RESET}`,
     `${DIM}${pad(tr("ui.colour"))}${RESET} ${w.color ? paintFg(w.color, w.color) : `${DIM}${tr("ui.auto")}${RESET}`}`,
     `${DIM}${pad(tr("ui.label"))}${RESET} ${w.label ?? `${DIM}\u2014${RESET}`}`,
     `${DIM}${pad(tr("ui.raw"))}${RESET} ${w.raw ? tr("ui.on") : `${DIM}${tr("ui.off")}${RESET}`}`,
@@ -406,7 +406,7 @@ function draw(state) {
       const marker = active ? `${BOLD}\u25b8${RESET}` : " ";
       const colour = w.color ? paintFg(w.color, w.color) : `${DIM}${tr("ui.auto")}${RESET}`;
       const gutter = wi === 0 ? `${DIM}L${li + 1}${RESET}` : "  ";
-      listRows.push({ text: `${gutter} ${marker} ${w.type}  ${colour}`, active });
+      listRows.push({ text: `${gutter} ${marker} ${widgetName(cfgLang, w.type)}  ${colour}`, active });
     });
   });
 
@@ -451,7 +451,9 @@ function draw(state) {
     out.push(row(`${BOLD}${tr("ui.addWidget")}${RESET} ${DIM}${state.pick + 1}/${PICKER.length}${RESET}`, W));
     PICKER.slice(from, from + 7).forEach((t, i) => {
       const at = from + i;
-      out.push(row(`${at === state.pick ? INVERSE : ""}${at === state.pick ? "\u25b8" : " "} ${t}${RESET}`, W));
+      const name = widgetName(cfgLang, t);
+      const label = name === t ? t : `${name} ${DIM}${t}${RESET}`;
+      out.push(row(`${at === state.pick ? INVERSE : ""}${at === state.pick ? "\u25b8" : " "} ${label}${RESET}`, W));
     });
   } else if (state.mode === "presets") {
     out.push(row(`${BOLD}${tr("ui.preset")}${RESET} ${DIM}${tr("ui.chooseApply")}${RESET}`, W));

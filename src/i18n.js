@@ -73,6 +73,7 @@ const STRINGS = {
     "ui.help.bold": "bold",
     "ui.help.lang": "switch language",
     "ui.help.quit": "quit (auto-saves)",
+    "ui.rawType": "type id",
   },
   zh: {
     "state.idle": "就绪",
@@ -144,6 +145,56 @@ const STRINGS = {
     "ui.help.bold": "加粗",
     "ui.help.lang": "切换语言",
     "ui.help.quit": "退出(自动保存)",
+    "ui.rawType": "类型 id",
+    "widget.agent-state": "状态",
+    "widget.model": "模型",
+    "widget.thinking-effort": "思考强度",
+    "widget.current-working-dir": "工作目录",
+    "widget.terminal-width": "终端宽度",
+    "widget.memory": "内存",
+    "widget.clock": "时钟",
+    "widget.git-branch": "分支",
+    "widget.git-changes": "改动统计",
+    "widget.git-insertions": "新增行",
+    "widget.git-deletions": "删除行",
+    "widget.git-sha": "提交号",
+    "widget.git-root": "仓库名",
+    "widget.git-origin": "远程仓库",
+    "widget.git-staged": "已暂存",
+    "widget.git-unstaged": "未暂存",
+    "widget.git-untracked": "未跟踪",
+    "widget.git-ahead-behind": "领先/落后",
+    "widget.context-percentage-usable": "上下文百分比",
+    "widget.context-percentage": "上下文占比",
+    "widget.context-remaining": "上下文剩余",
+    "widget.context-bar": "上下文进度条",
+    "widget.context-length": "上下文长度",
+    "widget.context-window": "上下文窗口",
+    "widget.tokens-input": "输入 tokens",
+    "widget.tokens-output": "输出 tokens",
+    "widget.tokens-total": "tokens 总量",
+    "widget.tokens-cached": "缓存 tokens",
+    "widget.cache-hit-rate": "缓存命中率",
+    "widget.session-usage": "5 小时额度",
+    "widget.weekly-usage": "每周额度",
+    "widget.reset-timer": "5 小时重置",
+    "widget.weekly-reset-timer": "每周重置",
+    "widget.title": "会话标题",
+    "widget.conversation-id": "会话 ID",
+    "widget.plan": "套餐",
+    "widget.sandbox": "沙箱",
+    "widget.queue": "待发消息",
+    "widget.tasks": "任务/子代理",
+    "widget.cost": "花费",
+    "widget.vim-mode": "Vim 模式",
+    "widget.cycle-mode": "审批模式",
+    "widget.separator": "分隔符",
+    "widget.flex-separator": "弹性分隔符",
+    "widget.custom-text": "自定义文本",
+    "widget.text": "文本",
+    "widget.symbol": "符号",
+    "widget.claude-session-id": "会话 ID",
+    "widget.tokens": "tokens",
   },
 };
 
@@ -164,3 +215,10 @@ export function t(lang, key, ...args) {
 }
 
 export const translator = (lang) => (key, ...args) => t(lang, key, ...args);
+
+// Widget type names are shown in the editor only; the rendered status line
+// keeps the raw values, so translations never leak into agy's output.
+export function widgetName(lang, type) {
+  const table = STRINGS[lang];
+  return (table && table[`widget.${type}`]) || type;
+}

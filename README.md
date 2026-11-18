@@ -64,7 +64,9 @@ One Node process per refresh, ~50 ms including startup.
 
 ### Language
 
-`"language": "zh"` (or `"en"`) switches the status line and the editor to Chinese / English: agent states (就绪/工作中/调用工具), task counts (个子代理 · 个后台任务), reset timers (1时30分, 6天11时) and every editor label. Without the key it follows `AGYSTATUSLINE_LANG` / `LC_ALL` / `LANG`, defaulting to English. Press `g` in the editor to toggle, or pass `--lang zh` for a single render.
+`"language": "zh"` switches **the editor** to Chinese: pane titles, key hints, help, status messages and widget names (`separator` → 分隔符, `git-branch` → 分支, `context-percentage-usable` → 上下文百分比). The raw type id stays visible next to it, so configs remain portable.
+
+The rendered status line is **not** translated — `READY`, `1 subagent · 2 tasks`, `1h 30m` stay exactly as configured, so a language switch never changes what agy displays. Without the key the editor follows `AGYSTATUSLINE_LANG` / `LC_ALL` / `LANG`, defaulting to English; press `g` in the editor to toggle.
 
 Colours: `black red green yellow blue magenta cyan white`, the `bright*` variants, `#rrggbb`, or a theme slot name. `NO_COLOR=1` / `--no-color` disables colour.
 
@@ -121,7 +123,7 @@ Run it with no arguments in a terminal (or `agystatusline edit`):
 | `agystatusline preset [default\|minimal\|powerline\|git]` | switch layout, previews it |
 | `agystatusline edit` (or no args in a TTY) | interactive editor |
 | `agystatusline config` | print the config path |
-| `agystatusline --demo [--lang zh]` | render a sample payload |
+| `agystatusline --demo` | render a sample payload |
 | `agystatusline --version` | print the version |
 
 ## Behaviour worth knowing

@@ -127,9 +127,8 @@ function gitInfo(p, need, ttl) {
   return info;
 }
 
-function render(payload, { color, lang }) {
+function render(payload, { color }) {
   const config = loadConfig();
-  if (lang) config.language = lang; // one-off override, never written back
   const need = new Set(config.lines.flat().map((w) => w.type));
   const ctx = {
     p: payload,
@@ -264,8 +263,7 @@ const color = !argv.includes("--no-color") && !process.env.NO_COLOR;
 let line = "";
 try {
   const payload = raw.trim() ? JSON.parse(raw) : {};
-  const langArg = argv.find((a) => a.startsWith("--lang="))?.slice(7) ?? (argv.includes("--lang") ? argv[argv.indexOf("--lang") + 1] : null);
-  line = render(payload, { color, lang: langArg });
+  line = render(payload, { color });
 } catch (err) {
   logError(err);
   line = "agy";

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectLang, t, translator } from "../src/i18n.js";
-import { renderLines, duration } from "../src/render.js";
+import { detectLang, t, translator, widgetName } from "../src/i18n.js";
+import { renderLines } from "../src/render.js";
 
 const P = {
   agent_state: "tool_use",
@@ -11,7 +11,7 @@ const P = {
   subagents: [{ status: "running" }],
   task_count: 2,
 };
-const ctx = (extra = {}) => ({ p: P, home: "/root", git: { branch: "main" }, width: 0, ...extra });
+const ctx = { p: P, home: "/root", git: { branch: "main" }, width: 0 };
 
 test("config language wins over the environment", () => {
   const before = process.env.AGYSTATUSLINE_LANG;
@@ -23,41 +23,37 @@ test("config language wins over the environment", () => {
   else process.env.AGYSTATUSLINE_LANG = before;
 });
 
-test("missing keys fall back to English rather than printing the key", () => {
-  assert.equal(t("zh", "state.idle"), "就绪");
-  assert.equal(t("en", "state.idle"), "READY");
+test("editor strings are translated, missing keys fall back to the key", () => {
+  assert.equal(t("zh", "ui.colour"), "颜色");
+  assert.equal(t("en", "ui.colour"), "colour");
   assert.equal(t("zh", "nope.not.a.key"), "nope.not.a.key");
-});
-
-test("placeholders are substituted", () => {
   assert.equal(t("zh", "ui.msg.added", "model"), "已添加 model");
-  assert.equal(t("en", "ui.msg.added", "model"), "added model");
   assert.equal(translator("zh")("ui.msg.deleted", "separator"), "已删除 separator");
 });
 
-test("Chinese renders state, tasks and timers", () => {
-  const cfg = {
-    language: "zh",
-    lines: [[
-      { type: "agent-state" }, { type: "separator" },
-      { type: "tasks" }, { type: "separator" },
-      { type: "reset-timer" },
-    ]],
-  };
-  assert.equal(renderLines(cfg, ctx(), { color: false }), "调用工具 | 1 个子代理 · 2 个后台任务 | 1时30分");
+test("widget names are translated for the editor", () => {
+  assert.equal(widgetName("zh", "separator"), "分隔符");
+  assert.equal(widgetName("zh", "git-branch"), "分支");
+  assert.equal(widgetName("zh", "context-percentage-usable"), "上下文百分比");
+  assert.equal(widgetName("en", "separator"), "separator");
+  assert.equal(widgetName("zh", "unknown-widget"), "unknown-widget");
 });
 
-test("English stays the default when no language is configured", () => {
-  const cfg = { lines: [[{ type: "agent-state" }, { type: "separator" }, { type: "tasks" }]] };
-  const before = process.env.AGYSTATUSLINE_LANG;
-  delete process.env.AGYSTATUSLINE_LANG;
-  assert.equal(renderLines(cfg, ctx(), { color: false }), "TOOL | 1 subagent · 2 tasks");
-  if (before !== undefined) process.env.AGYSTATUSLINE_LANG = before;
+test("language never changes what agy renders", () => {
+  const lines = [[
+    { type: "agent-state" }, { type: "separator" },
+    { type: "tasks" }, { type: "separator" },
+    { type: "reset-timer" },
+  ]];
+  const en = renderLines({ lines }, ctx, { color: false });
+  const zh = renderLines({ language: "zh", lines }, ctx, { color: false });
+  assert.equal(en, "TOOL | 1 subagent · 2 tasks | 1h 30m");
+  assert.equal(zh, en);
 });
 
-test("durations use each language's units", () => {
-  assert.equal(duration(5400, "en"), "1h 30m");
-  assert.equal(duration(5400, "zh"), "1时30分");
-  assert.equal(duration(560580, "zh"), "6天11时");
-  assert.equal(duration(30, "zh"), "刚刚");
+test("Chinese editor strings never leak into the rendered line", () => {
+  const cfg = { language: "zh", lines: [[{ type: "separator", character: "|" }, { type: "model" }]] };
+  const out = renderLines(cfg, ctx, { color: false });
+  assert.equal(out, "Gemini 4 Argon (High)");
+  assert.ok(!/[\u4e00-\u9fff]/.test(out));
 });
