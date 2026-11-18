@@ -13,7 +13,7 @@ import { DEMO_PAYLOAD, DEMO_GIT, demoCtx } from "../src/demo.js";
 import { runTUI } from "../src/tui.js";
 import { PRESETS, PRESET_NAMES } from "../src/presets.js";
 
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 const HOME = homedir();
 const CACHE_DIR = process.env.XDG_CACHE_HOME
   ? join(process.env.XDG_CACHE_HOME, "agystatusline")
@@ -127,8 +127,9 @@ function gitInfo(p, need, ttl) {
   return info;
 }
 
-function render(payload, { color }) {
+function render(payload, { color, lang }) {
   const config = loadConfig();
+  if (lang) config.language = lang; // one-off override, never written back
   const need = new Set(config.lines.flat().map((w) => w.type));
   const ctx = {
     p: payload,
@@ -263,7 +264,8 @@ const color = !argv.includes("--no-color") && !process.env.NO_COLOR;
 let line = "";
 try {
   const payload = raw.trim() ? JSON.parse(raw) : {};
-  line = render(payload, { color });
+  const langArg = argv.find((a) => a.startsWith("--lang="))?.slice(7) ?? (argv.includes("--lang") ? argv[argv.indexOf("--lang") + 1] : null);
+  line = render(payload, { color, lang: langArg });
 } catch (err) {
   logError(err);
   line = "agy";

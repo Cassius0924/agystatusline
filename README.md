@@ -55,11 +55,16 @@ One Node process per refresh, ~50 ms including startup.
 | `global.minimalist` | drop labels / decorations, values only |
 | `global.inheritColors` | separators take the colour of the value before them |
 | `theme` | `mono` / `aurora` / `paper`, or an object mapping slots (`model`, `git`, `meta`, `ok`, `warn`, `bad`) to colours |
+| `language` | `en` (default) / `zh` — UI and widget wording |
 | `powerline.enabled` | draw blocks with background colours instead of plain text |
 | `powerline.separators` | glyph used between blocks (default `\ue0b0`) |
 | `powerline.endCap` / `startCap` | optional cap glyphs |
 | `powerline.autoAlign` | pad blocks so columns line up across rows (default on) |
 | `flex-separator` widget | a row spacer: with `width` known it right-aligns the tail |
+
+### Language
+
+`"language": "zh"` (or `"en"`) switches the status line and the editor to Chinese / English: agent states (就绪/工作中/调用工具), task counts (个子代理 · 个后台任务), reset timers (1时30分, 6天11时) and every editor label. Without the key it follows `AGYSTATUSLINE_LANG` / `LC_ALL` / `LANG`, defaulting to English. Press `g` in the editor to toggle, or pass `--lang zh` for a single render.
 
 Colours: `black red green yellow blue magenta cyan white`, the `bright*` variants, `#rrggbb`, or a theme slot name. `NO_COLOR=1` / `--no-color` disables colour.
 
@@ -116,7 +121,7 @@ Run it with no arguments in a terminal (or `agystatusline edit`):
 | `agystatusline preset [default\|minimal\|powerline\|git]` | switch layout, previews it |
 | `agystatusline edit` (or no args in a TTY) | interactive editor |
 | `agystatusline config` | print the config path |
-| `agystatusline --demo` | render a sample payload |
+| `agystatusline --demo [--lang zh]` | render a sample payload |
 | `agystatusline --version` | print the version |
 
 ## Behaviour worth knowing

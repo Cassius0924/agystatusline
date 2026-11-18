@@ -1,6 +1,7 @@
 // Widget registry + renderer. Values come from the JSON Antigravity CLI pipes
 // on stdin (see https://antigravity.google/docs/cli/statusline).
 // Type names follow ccstatusline so an existing settings.json ports over.
+import { detectLang, translator } from "./i18n.js";
 
 const COLORS = {
   black: 30, red: 31, green: 32, yellow: 33, blue: 34, magenta: 35, cyan: 36, white: 37,
@@ -53,15 +54,17 @@ export function humanTokens(n) {
   return String(n);
 }
 
-export function duration(seconds) {
+export function duration(seconds, lang = "en") {
   if (seconds === null || seconds < 0) return "";
-  if (seconds < 60) return "now";
+  const tr = translator(lang);
+  if (seconds < 60) return tr("time.now");
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
+  const sep = lang === "zh" ? "" : " ";
+  if (d > 0) return `${d}${tr("time.day")}${sep}${h}${tr("time.hour")}`;
+  if (h > 0) return `${h}${tr("time.hour")}${sep}${m}${tr("time.min")}`;
+  return `${m}${tr("time.min")}`;
 }
 
 // 5-hour / weekly bucket: gemini-* first, then the 3p-* equivalent.
@@ -114,7 +117,10 @@ export const WIDGETS = {
   // session
   model: ({ p }) => p.model?.display_name ?? p.model?.id ?? "",
   "thinking-effort": ({ p }) => p.model?.effort ?? "",
-  "agent-state": ({ p }) => STATE_LABEL[p.agent_state || "idle"] ?? String(p.agent_state).toUpperCase(),
+  "agent-state": ({ p, lang }) => {
+    const state = p.agent_state || "idle";
+    return STATE_LABEL[state] ? translator(lang)(`state.${state}`) : String(state).toUpperCase();
+  },
   "cycle-mode": ({ p }) => p.cycle_mode ?? "",
   "vim-mode": ({ p }) => p.vim?.mode ?? "",
   "conversation-id": ({ p }) => (p.conversation_id || "").slice(0, 8),
@@ -127,12 +133,13 @@ export const WIDGETS = {
   plan: ({ p }) => p.plan_tier ?? "",
   sandbox: ({ p }) => (p.sandbox ? (p.sandbox.enabled ? "SB:ON" : "SB:OFF") : ""),
   queue: ({ p }) => (num(p.pending_input_count) > 0 ? `+${p.pending_input_count}` : ""),
-  tasks: ({ p }) => {
+  tasks: ({ p, lang }) => {
+    const tr = translator(lang);
     const running = Array.isArray(p.subagents) ? p.subagents.filter((x) => x.status === "running").length : 0;
     const bg = num(p.task_count) ?? 0;
     const bits = [];
-    if (running) bits.push(`${running} subagent${running > 1 ? "s" : ""}`);
-    if (bg) bits.push(`${bg} task${bg > 1 ? "s" : ""}`);
+    if (running) bits.push(lang === "zh" ? `${running} ${tr(running > 1 ? "tasks.subagents" : "tasks.subagent")}` : `${running} ${tr(running > 1 ? "tasks.subagents" : "tasks.subagent")}`);
+    if (bg) bits.push(lang === "zh" ? `${bg} ${tr(bg > 1 ? "tasks.tasks" : "tasks.task")}` : `${bg} ${tr(bg > 1 ? "tasks.tasks" : "tasks.task")}`);
     return bits.join(" \u00b7 ");
   },
   cost: ({ p }) => {
@@ -200,8 +207,8 @@ export const WIDGETS = {
     const b = quotaBucket(p.quota, "weekly");
     return b?.remaining_fraction === undefined ? "" : `${Math.round(b.remaining_fraction * 100)}%`;
   },
-  "reset-timer": ({ p }) => duration(quotaBucket(p.quota, "5h")?.reset_in_seconds ?? null),
-  "weekly-reset-timer": ({ p }) => duration(quotaBucket(p.quota, "weekly")?.reset_in_seconds ?? null),
+  "reset-timer": ({ p, lang }) => duration(quotaBucket(p.quota, "5h")?.reset_in_seconds ?? null, lang),
+  "weekly-reset-timer": ({ p, lang }) => duration(quotaBucket(p.quota, "weekly")?.reset_in_seconds ?? null, lang),
 
   // static
   separator: (_, o) => o.character ?? "|",
@@ -372,7 +379,7 @@ export function renderLines(config, ctx, { color = true, width = 0, now = null }
   const padLeft = pad === "both" || pad === "left" ? " " : "";
   const padRight = pad === "both" || pad === "right" ? " " : "";
   const minimal = g.minimalist === true;
-  const c = { ...ctx, now: ctx.now ?? now };
+  const c = { ...ctx, now: ctx.now ?? now, lang: ctx.lang ?? detectLang(config) };
 
   const rows = [];
   for (const line of config.lines ?? []) {

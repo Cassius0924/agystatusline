@@ -6,6 +6,7 @@ import { emitKeypressEvents } from "node:readline";
 import { WIDGETS, renderLines } from "./render.js";
 import { demoCtx } from "./demo.js";
 import { PRESETS, PRESET_NAMES } from "./presets.js";
+import { LANGUAGES, detectLang, translator } from "./i18n.js";
 
 const THEMES = ["aurora", "mono", "paper", null];
 export const SWATCHES = [
@@ -68,7 +69,7 @@ export function applyKey(state, key) {
       line.splice(s.idx + 1, 0, { type });
       s.idx += 1;
       s.dirty = true;
-      s.status = `added ${type}`;
+      s.status = translator(detectLang(s.config))("ui.msg.added", type);
       s.mode = "list";
     } else if (key.name === "escape") s.mode = "list";
     return s;
@@ -82,7 +83,7 @@ export function applyKey(state, key) {
       if (colour) current.color = colour;
       else delete current.color;
       s.dirty = true;
-      s.status = `colour ${colour ?? "auto"}`;
+      s.status = translator(detectLang(s.config))("ui.msg.colour", colour ?? translator(detectLang(s.config))("ui.auto"));
       s.mode = "list";
     } else if (key.name === "escape") s.mode = "list";
     return s;
@@ -93,7 +94,7 @@ export function applyKey(state, key) {
       if (s.input.trim()) current.label = s.input.trim();
       else delete current.label;
       s.dirty = true;
-      s.status = current.label ? `label ${current.label}` : "label cleared";
+      s.status = current.label ? translator(detectLang(s.config))("ui.msg.label", current.label) : translator(detectLang(s.config))("ui.msg.labelCleared");
       s.mode = "list";
     } else if (key.name === "escape") {
       s.mode = "list";
@@ -114,7 +115,7 @@ export function applyKey(state, key) {
       s.line = 0;
       s.idx = 0;
       s.dirty = true;
-      s.status = `preset ${name}`;
+      s.status = translator(detectLang(s.config))("ui.msg.preset", name);
       s.mode = "list";
     } else if (key.name === "escape") {
       s.mode = "list";
@@ -166,7 +167,7 @@ export function applyKey(state, key) {
         const [gone] = line.splice(s.idx, 1);
         s.idx = clamp(s.idx, line.length - 1);
         s.dirty = true;
-        s.status = `deleted ${gone.type}`;
+        s.status = translator(detectLang(s.config))("ui.msg.deleted", gone.type);
       }
       break;
     case "n":
@@ -193,7 +194,7 @@ export function applyKey(state, key) {
         current.raw = !current.raw;
         if (!current.raw) delete current.raw;
         s.dirty = true;
-        s.status = `raw ${current.raw ? "on" : "off"}`;
+        s.status = translator(detectLang(s.config))("ui.msg.raw", translator(detectLang(s.config))(current.raw ? "ui.on" : "ui.off"));
       }
       break;
     case "o":
@@ -208,25 +209,33 @@ export function applyKey(state, key) {
         cfg.powerline.autoAlign = true;
       }
       s.dirty = true;
-      s.status = `powerline ${cfg.powerline.enabled ? "on" : "off"}`;
+      s.status = translator(detectLang(cfg))("ui.msg.powerline", translator(detectLang(cfg))(cfg.powerline.enabled ? "ui.on" : "ui.off"));
       break;
     case "t":
       s.themeIdx = (s.themeIdx + 1) % THEMES.length;
       if (THEMES[s.themeIdx]) cfg.theme = THEMES[s.themeIdx];
       else delete cfg.theme;
       s.dirty = true;
-      s.status = `theme ${THEMES[s.themeIdx] ?? "none"}`;
+      s.status = translator(detectLang(cfg))("ui.msg.theme", THEMES[s.themeIdx] ?? "-");
       break;
     case "m":
       cfg.global = { ...(cfg.global ?? {}), minimalist: !cfg.global?.minimalist };
       s.dirty = true;
-      s.status = `minimalist ${cfg.global.minimalist ? "on" : "off"}`;
+      s.status = translator(detectLang(cfg))("ui.msg.minimalist", translator(detectLang(cfg))(cfg.global.minimalist ? "ui.on" : "ui.off"));
       break;
     case "b":
       cfg.global = { ...(cfg.global ?? {}), bold: !cfg.global?.bold };
       s.dirty = true;
-      s.status = `bold ${cfg.global.bold ? "on" : "off"}`;
+      s.status = translator(detectLang(cfg))("ui.msg.bold", translator(detectLang(cfg))(cfg.global.bold ? "ui.on" : "ui.off"));
       break;
+    case "g": {
+      const at = LANGUAGES.indexOf(detectLang(cfg));
+      const next = LANGUAGES[(at + 1) % LANGUAGES.length];
+      cfg.language = next;
+      s.dirty = true;
+      s.status = translator(next)("ui.msg.lang", next === "zh" ? "中文" : "English");
+      break;
+    }
     case "?":
     case "h":
       s.mode = "help";
@@ -269,19 +278,52 @@ const paintSwatch = (colour) => {
   return `${esc(`48;2;${(n >> 16) & 255};${(n >> 8) & 255};${n & 255}m`)}    ${RESET}`;
 };
 
-const visible = (s) => [...s.replace(/\x1b\[[0-9;]*m/g, "")].length;
+// Terminal cell width: CJK and fullwidth glyphs take two columns, so a plain
+// codepoint count would misalign every box in Chinese.
+const wide = (cp) =>
+  (cp >= 0x1100 && cp <= 0x115f) ||
+  (cp >= 0x2e80 && cp <= 0x303e) ||
+  (cp >= 0x3041 && cp <= 0x33ff) ||
+  (cp >= 0x3400 && cp <= 0x4dbf) ||
+  (cp >= 0x4e00 && cp <= 0x9fff) ||
+  (cp >= 0xa000 && cp <= 0xa4cf) ||
+  (cp >= 0xac00 && cp <= 0xd7a3) ||
+  (cp >= 0xf900 && cp <= 0xfaff) ||
+  (cp >= 0xfe30 && cp <= 0xfe4f) ||
+  (cp >= 0xff00 && cp <= 0xff60) ||
+  (cp >= 0xffe0 && cp <= 0xffe6);
+
+const dwidth = (text) => {
+  let total = 0;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0);
+    total += wide(cp) ? 2 : 1;
+  }
+  return total;
+};
+
+const visible = (s) => dwidth(s.replace(/\x1b\[[0-9;]*m/g, ""));
+
 const fit = (s, w) => {
   const plain = s.replace(/\x1b\[[0-9;]*m/g, "");
-  const len = [...plain].length;
+  const len = dwidth(plain);
   if (len === w) return s;
   if (len < w) return s + " ".repeat(w - len);
-  return `${[...plain].slice(0, Math.max(0, w - 1)).join("")}\u2026`;
+  let out = "";
+  let used = 0;
+  for (const ch of plain) {
+    const cw = wide(ch.codePointAt(0)) ? 2 : 1;
+    if (used + cw > w - 1) break;
+    out += ch;
+    used += cw;
+  }
+  return out + "\u2026" + " ".repeat(Math.max(0, w - used - 1));
 };
 
 const top = (title, w, right = "") => {
   const head = ` ${title} `;
   const tail = right ? ` ${right} ` : "";
-  const fill = Math.max(0, w - 2 - [...head].length - visible(tail));
+  const fill = Math.max(0, w - 2 - dwidth(head) - visible(tail));
   return `${DIM}\u250c${RESET}${BOLD}${head}${RESET}${DIM}${"\u2500".repeat(fill)}${RESET}${tail}${DIM}\u2510${RESET}`;
 };
 const mid = (w) => `${DIM}\u251c${"\u2500".repeat(w - 2)}\u2524${RESET}`;
@@ -289,57 +331,63 @@ const bottom = (w) => `${DIM}\u2514${"\u2500".repeat(w - 2)}\u2518${RESET}`;
 const row = (content, w) => `${DIM}\u2502${RESET}${fit(` ${content}`, w - 2)}${DIM}\u2502${RESET}`;
 
 function detailRows(state) {
+  const tr = translator(detectLang(state.config));
   const w = state.config.lines?.[state.line]?.[state.idx];
-  if (!w) return [`${DIM}no widget selected${RESET}`];
+  if (!w) return [`${DIM}${tr("ui.noSelection")}${RESET}`];
   const ctx = demoCtx(120);
-  const alone = renderLines({ lines: [[w]] }, ctx, { color: true, width: 120, now: ctx.now });
+  const alone = renderLines({ ...state.config, lines: [[w]] }, ctx, { color: true, width: 120, now: ctx.now });
+  const pad = (word) => word.padEnd(7);
   return [
-    `${DIM}type${RESET}    ${BOLD}${w.type}${RESET}`,
-    `${DIM}colour${RESET}  ${w.color ? paintFg(w.color, w.color) : `${DIM}auto${RESET}`}`,
-    `${DIM}label${RESET}   ${w.label ?? `${DIM}\u2014${RESET}`}`,
-    `${DIM}raw${RESET}     ${w.raw ? "on" : `${DIM}off${RESET}`}`,
-    `${DIM}renders${RESET} ${alone || `${DIM}(empty with this payload)${RESET}`}`,
+    `${DIM}${pad(tr("ui.type"))}${RESET} ${BOLD}${w.type}${RESET}`,
+    `${DIM}${pad(tr("ui.colour"))}${RESET} ${w.color ? paintFg(w.color, w.color) : `${DIM}${tr("ui.auto")}${RESET}`}`,
+    `${DIM}${pad(tr("ui.label"))}${RESET} ${w.label ?? `${DIM}\u2014${RESET}`}`,
+    `${DIM}${pad(tr("ui.raw"))}${RESET} ${w.raw ? tr("ui.on") : `${DIM}${tr("ui.off")}${RESET}`}`,
+    `${DIM}${pad(tr("ui.renders"))}${RESET} ${alone || `${DIM}${tr("ui.emptyPayload")}${RESET}`}`,
     "",
-    `${DIM}Enter colour \u00b7 l label \u00b7 r raw \u00b7 x delete${RESET}`,
+    `${DIM}${tr("ui.detailKeys")}${RESET}`,
   ];
 }
 
 function draw(state) {
+  const cfgLang = detectLang(state.config);
+  const tr = translator(cfgLang);
   const cols = process.stdout.columns || 100;
   const rows = process.stdout.rows || 40;
   const W = Math.max(56, Math.min(cols - 1, 130));
   const cfg = state.config;
   const out = [];
 
+  const word = (key, on) => (on ? `${GREEN}${tr(key)}${RESET}` : `${DIM}${tr(key)}:${tr("ui.off")}${RESET}`);
   const flags = [
     cfg.theme ? paintFg(`theme:${cfg.theme}`, cfg.theme) : `${DIM}theme:none${RESET}`,
-    cfg.powerline?.enabled ? `${GREEN}powerline${RESET}` : `${DIM}powerline:off${RESET}`,
-    cfg.global?.minimalist ? `${GREEN}minimal${RESET}` : `${DIM}minimal:off${RESET}`,
-    cfg.global?.bold ? "bold" : `${DIM}bold:off${RESET}`,
+    word("powerline", cfg.powerline?.enabled),
+    word("minimal", cfg.global?.minimalist),
+    word("bold", cfg.global?.bold),
   ].join(`${DIM} \u00b7 ${RESET}`);
   out.push(top("agystatusline", W, flags));
 
-  const preview = renderLines(cfg, demoCtx(W - 4), { color: true, width: W - 4, now: "14:05" }) || `${DIM}(empty layout)${RESET}`;
+  const preview = renderLines(cfg, demoCtx(W - 4), { color: true, width: W - 4, now: "14:05" }) || `${DIM}${tr("ui.emptyLayout")}${RESET}`;
   upLines(preview).forEach((l) => out.push(row(l, W)));
   out.push(mid(W));
 
   if (state.mode === "help") {
     const help = [
-      ["\u2191\u2193 / k j", "move inside a row"],
-      ["\u2190\u2192 / [ ]", "switch row"],
-      ["J K / shift+\u2191\u2193", "reorder widget"],
-      ["a", "add widget"],
-      ["x / d", "delete widget"],
-      ["Enter / c", "colour picker"],
-      ["l", "edit label"],
-      ["r", "raw value"],
-      ["n", "new row"],
-      ["o", "preset picker"],
-      ["p", "powerline"],
-      ["t", "cycle theme"],
-      ["m", "minimalist"],
-      ["b", "bold"],
-      ["q", "quit (auto-saves)"],
+      ["\u2191\u2193 / k j", tr("ui.help.move")],
+      ["\u2190\u2192 / [ ]", tr("ui.help.row")],
+      ["J K / shift+\u2191\u2193", tr("ui.help.reorder")],
+      ["a", tr("ui.help.add")],
+      ["x / d", tr("ui.help.delete")],
+      ["Enter / c", tr("ui.help.colour")],
+      ["l", tr("ui.help.label")],
+      ["r", tr("ui.help.raw")],
+      ["n", tr("ui.help.newRow")],
+      ["o", tr("ui.help.preset")],
+      ["p", tr("ui.help.powerline")],
+      ["t", tr("ui.help.theme")],
+      ["m", tr("ui.help.minimalist")],
+      ["b", tr("ui.help.bold")],
+      ["g", tr("ui.help.lang")],
+      ["q", tr("ui.help.quit")],
     ];
     help.forEach(([k, v]) => out.push(row(`${CYAN}${k.padEnd(20)}${RESET}${v}`, W)));
     out.push(bottom(W));
@@ -350,13 +398,13 @@ function draw(state) {
   const listRows = [];
   (cfg.lines ?? []).forEach((line, li) => {
     if (!line.length) {
-      listRows.push({ text: `${GREEN}L${li + 1}${RESET} ${DIM}empty row${RESET}`, active: li === state.line && line.length === 0 });
+      listRows.push({ text: `${GREEN}L${li + 1}${RESET} ${DIM}${tr("ui.emptyRow")}${RESET}`, active: li === state.line && line.length === 0 });
       return;
     }
     line.forEach((w, wi) => {
       const active = li === state.line && wi === state.idx;
       const marker = active ? `${BOLD}\u25b8${RESET}` : " ";
-      const colour = w.color ? paintFg(w.color, w.color) : `${DIM}auto${RESET}`;
+      const colour = w.color ? paintFg(w.color, w.color) : `${DIM}${tr("ui.auto")}${RESET}`;
       const gutter = wi === 0 ? `${DIM}L${li + 1}${RESET}` : "  ";
       listRows.push({ text: `${gutter} ${marker} ${w.type}  ${colour}`, active });
     });
@@ -389,31 +437,31 @@ function draw(state) {
 
   if (state.mode === "colors") {
     const swatches = SWATCHES.map((c, i) => {
-      const label = c === null ? "auto" : c.replace(/^bright/, "").slice(0, 9);
+      const label = c === null ? tr("ui.auto") : c.replace(/^bright/, "").slice(0, 9);
       const cell = `${paintSwatch(c)} ${paintFg(label, c)}`;
       return i === state.colorIdx ? `${INVERSE}${cell}${RESET}` : cell;
     });
-    out.push(row(`${BOLD}colour${RESET} ${swatches.slice(0, Math.max(1, Math.floor((W - 10) / 18))).join(" ")}`, W));
-    out.push(row(`${DIM}\u2190\u2192 choose \u00b7 Enter apply \u00b7 Esc cancel${RESET}`, W));
+    out.push(row(`${BOLD}${tr("ui.colour")}${RESET} ${swatches.slice(0, Math.max(1, Math.floor((W - 10) / 18))).join(" ")}`, W));
+    out.push(row(`${DIM}${tr("ui.chooseApply")}${RESET}`, W));
   } else if (state.mode === "label") {
-    out.push(row(`${BOLD}label${RESET}  ${state.input}${INVERSE} ${RESET}`, W));
-    out.push(row(`${DIM}type \u00b7 Enter apply \u00b7 Esc cancel${RESET}`, W));
+    out.push(row(`${BOLD}${tr("ui.label")}${RESET}  ${state.input}${INVERSE} ${RESET}`, W));
+    out.push(row(`${DIM}${tr("ui.typeLabel")}${RESET}`, W));
   } else if (state.mode === "picker") {
     const from = clamp(state.pick - 3, Math.max(0, PICKER.length - 7));
-    out.push(row(`${BOLD}add widget${RESET} ${DIM}${state.pick + 1}/${PICKER.length}${RESET}`, W));
+    out.push(row(`${BOLD}${tr("ui.addWidget")}${RESET} ${DIM}${state.pick + 1}/${PICKER.length}${RESET}`, W));
     PICKER.slice(from, from + 7).forEach((t, i) => {
       const at = from + i;
       out.push(row(`${at === state.pick ? INVERSE : ""}${at === state.pick ? "\u25b8" : " "} ${t}${RESET}`, W));
     });
   } else if (state.mode === "presets") {
-    out.push(row(`${BOLD}preset${RESET} ${DIM}\u2191\u2193 Enter apply \u00b7 Esc cancel${RESET}`, W));
+    out.push(row(`${BOLD}${tr("ui.preset")}${RESET} ${DIM}${tr("ui.chooseApply")}${RESET}`, W));
     PRESET_NAMES.forEach((name, i) => out.push(row(`${i === state.pick ? INVERSE : ""} ${name}${RESET}`, W)));
   } else {
-    out.push(row(`${DIM}\u2191\u2193 move  \u2190\u2192 row  J/K reorder  a add  x del  Enter colour  l label  r raw${RESET}`, W));
-    out.push(row(`${DIM}o preset  p powerline  t theme  m minimal  b bold  ? help  q quit${RESET}`, W));
+    out.push(row(`${DIM}${tr("ui.keys1")}${RESET}`, W));
+    out.push(row(`${DIM}${tr("ui.keys2")}${RESET}`, W));
   }
 
-  out.push(row(state.status ? `${GREEN}${state.status}${RESET}` : `${DIM}${state.dirty ? "saved" : ""}${RESET}`, W));
+  out.push(row(state.status ? `${GREEN}${state.status}${RESET}` : `${DIM}${state.dirty ? tr("ui.saved") : ""}${RESET}`, W));
   out.push(bottom(W));
   return CLEAR + out.join("\n") + "\n";
 }
