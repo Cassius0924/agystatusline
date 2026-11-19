@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyKey, initialState, PICKER, SWATCHES } from "../src/tui.js";
+import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { applyKey, initialState, PICKER, SWATCHES, saveConfig } from "../src/tui.js";
 
 const base = () => ({
   lines: [
@@ -144,6 +147,22 @@ test("? opens help and any key returns", () => {
   assert.equal(s.mode, "help");
   s = applyKey(s, key("x"));
   assert.equal(s.mode, "list");
+});
+
+test("saveConfig creates the config directory on first write", () => {
+  const dir = mkdtempSync(join(tmpdir(), "agsl-"));
+  const target = join(dir, "deep", "config", "settings.json");
+  assert.equal(saveConfig(target, { language: "zh" }), null);
+  assert.deepEqual(JSON.parse(readFileSync(target, "utf8")), { language: "zh" });
+});
+
+test("saveConfig reports a failure instead of throwing", () => {
+  const dir = mkdtempSync(join(tmpdir(), "agsl-"));
+  const blocker = join(dir, "not-a-dir");
+  writeFileSync(blocker, "x");
+  const err = saveConfig(join(blocker, "settings.json"), {});
+  assert.equal(typeof err, "string");
+  assert.ok(err.length > 0);
 });
 
 test("q ends the session", () => {

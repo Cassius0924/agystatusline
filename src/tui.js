@@ -1,7 +1,8 @@
 // Interactive editor. Hand-rolled (no Ink, no deps): framed layout, live
 // preview, widget list with a detail pane, colour picker, label editor and
 // preset switching. Every change saves immediately.
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { emitKeypressEvents } from "node:readline";
 import { WIDGETS, renderLines } from "./render.js";
 import { demoCtx } from "./demo.js";
@@ -470,10 +471,25 @@ function draw(state) {
 
 const upLines = (s) => s.split("\n");
 
+// Write the config, creating the directory the first time round (npx users can
+// land in the editor before `init` ever ran). Returns an error label or null.
+export function saveConfig(path, config) {
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+    return null;
+  } catch (err) {
+    return err?.code ?? String(err?.message ?? err);
+  }
+}
+
 export function runTUI(configPath, config) {
   const stdin = process.stdin;
   let state = initialState(config);
-  const save = () => writeFileSync(configPath, `${JSON.stringify(state.config, null, 2)}\n`);
+  const save = () => {
+    const err = saveConfig(configPath, state.config);
+    if (err) state = { ...state, status: `save failed: ${err}` };
+  };
 
   emitKeypressEvents(stdin);
   stdin.setRawMode(true);
