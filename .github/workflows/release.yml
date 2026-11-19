@@ -19,6 +19,9 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
+      # Trusted publishing needs npm >= 11.5; the Node 22 image ships npm 10.
+      - run: npm install -g npm@latest && npm --version
+
       - run: npm test
 
       - name: Tag must match package.json
