@@ -13,7 +13,7 @@ import { DEMO_PAYLOAD, DEMO_GIT, demoCtx } from "../src/demo.js";
 import { runTUI } from "../src/tui.js";
 import { PRESETS, PRESET_NAMES } from "../src/presets.js";
 
-const VERSION = "0.6.2";
+const VERSION = "0.6.3";
 const HOME = homedir();
 const CACHE_DIR = process.env.XDG_CACHE_HOME
   ? join(process.env.XDG_CACHE_HOME, "agystatusline")
@@ -200,7 +200,8 @@ function isWired() {
 function installToAgy({ force = false } = {}) {
   const settings = existsSync(AGY_SETTINGS) ? JSON.parse(readFileSync(AGY_SETTINGS, "utf8")) : {};
   if (settings.statusLine && !force && !isWired()) {
-    return { ok: false, message: `statusLine already set: ${JSON.stringify(settings.statusLine)} — 用 init --force 覆盖` };
+    const current = String(settings.statusLine.command ?? JSON.stringify(settings.statusLine));
+    return { ok: false, conflict: current, message: `statusLine 已被占用: ${current}` };
   }
   if (existsSync(AGY_SETTINGS)) copyFileSync(AGY_SETTINGS, `${AGY_SETTINGS}.agystatusline.bak`);
 
@@ -224,11 +225,11 @@ function installToAgy({ force = false } = {}) {
   return {
     ok,
     command,
-    message: ok ? `已接入 agy → ${command}${warn}` : `自检失败: exit ${check.status} ${(check.stderr ?? "").trim()}`,
+    message: ok ? `已接入 agy → ${command}${warn}（重开 agy 会话生效）` : `自检失败: exit ${check.status} ${(check.stderr ?? "").trim()}`,
   };
 }
 
-function init(argv) {
+async function init(argv) {
   mkdirSync(CONFIG_DIR, { recursive: true });
   if (!existsSync(CONFIG_PATH)) {
     writeFileSync(CONFIG_PATH, `${JSON.stringify(DEFAULT_CONFIG, null, 2)}\n`);
@@ -236,7 +237,22 @@ function init(argv) {
   } else {
     console.log(`config   ${CONFIG_PATH} (kept)`);
   }
-  const res = installToAgy({ force: argv.includes("--force") });
+  let res = installToAgy({ force: argv.includes("--force") });
+  if (res.conflict) {
+    if (!process.stdin.isTTY) {
+      console.log(`status  ${res.message}\n        非交互环境：加 --force 覆盖`);
+      return 1;
+    }
+    const { createInterface } = await import("node:readline/promises");
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await rl.question(`${res.message}\n覆盖它？[y/N] `);
+    rl.close();
+    if (!/^y(es)?$/i.test(answer.trim())) {
+      console.log("aborted — statusLine left untouched");
+      return 1;
+    }
+    res = installToAgy({ force: true });
+  }
   console.log(`${isWired() ? "wired   " : "status  "} ${res.message}`);
   if (res.ok) console.log(`self-check ok: ${AGY_SETTINGS}`);
   console.log("restart agy (or open a new session) to pick it up");
@@ -248,7 +264,7 @@ if (argv.includes("--version") || argv.includes("-v")) {
   console.log(VERSION);
   process.exit(0);
 }
-if (argv[0] === "init") process.exit(init(argv));
+if (argv[0] === "init") process.exit(await init(argv));
 if (argv[0] === "preset") process.exit(writePreset(argv[1] ?? ""));
 if (argv[0] === "config") {
   console.log(CONFIG_PATH);
@@ -263,13 +279,7 @@ const wantsTUI =
   (!argv.includes("--demo") && !argv.includes("--version") && process.stdin.isTTY && process.stdout.isTTY);
 
 if (wantsTUI) {
-  runTUI(CONFIG_PATH, loadConfig(), {
-    isWired,
-    install: () => {
-      const res = installToAgy();
-      return res.message;
-    },
-  });
+  runTUI(CONFIG_PATH, loadConfig(), { isWired, install: (opts) => installToAgy(opts) });
 } else {
   renderOnce();
 }

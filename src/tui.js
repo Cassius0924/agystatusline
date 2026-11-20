@@ -9,7 +9,7 @@ import { WIDGETS, renderLines } from "./render.js";
 import { demoCtx } from "./demo.js";
 import { detectLang, translator, widgetName } from "./i18n.js";
 
-const VERSION = "0.6.2";
+const VERSION = "0.6.3";
 const THEMES = ["aurora", "mono", "paper", null];
 export const SWATCHES = [
   null, "brightBlue", "brightMagenta", "brightCyan", "brightGreen", "brightYellow",
@@ -109,10 +109,19 @@ function applyKeyInner(state, key) {
 
   // ── modal: quit confirmation ──
   if (s.confirm) {
-    if (key.name === "up" || key.name === "down" || key.name === "left" || key.name === "right") s.confirm = { choice: (s.confirm.choice + 1) % 3 };
-    else if (key.name === "escape" || key.name === "q") s.confirm = null;
+    const isInstall = s.confirm.kind === "install";
+    const count = isInstall ? 2 : 3;
+    if (key.name === "up" || key.name === "down" || key.name === "left" || key.name === "right") {
+      s.confirm = { ...s.confirm, choice: (s.confirm.choice + 1) % count };
+    } else if (key.name === "escape" || key.name === "q") s.confirm = null;
     else if (key.name === "return") {
-      if (s.confirm.choice === 0) { s.saveNow = true; s.done = true; s.confirm = null; }
+      if (isInstall) {
+        if (s.confirm.choice === 0) {
+          const res = s.hooks?.install?.({ force: true });
+          s.status = res?.message ?? "";
+        }
+        s.confirm = null;
+      } else if (s.confirm.choice === 0) { s.saveNow = true; s.done = true; s.confirm = null; }
       else if (s.confirm.choice === 1) { s.done = true; s.confirm = null; }
       else s.confirm = null;
     }
@@ -139,6 +148,11 @@ function applyKeyInner(state, key) {
     } else if (key.name === "escape") s.screen = "edit";
     else if (key.name === "backspace") s.input = s.input.slice(0, -1);
     else if (typeof key.sequence === "string" && key.sequence.length === 1 && key.sequence >= " ") s.input += key.sequence;
+    return s;
+  }
+
+  if (key.name === "s:save" && ["main", "lines", "edit", "themes"].includes(s.screen)) {
+    s.saveNow = true;
     return s;
   }
 
@@ -191,14 +205,13 @@ function applyKeyInner(state, key) {
       s.status = cfg.language;
     }
     else if (key.name === "escape" || key.name === "q") {
-      if (dirtyOf(s)) s.confirm = { choice: 0 }; else s.done = true;
+      if (dirtyOf(s)) s.confirm = { kind: "quit", choice: 0 }; else s.done = true;
     } else if (key.name === "return") {
       const item = items[s.menuIdx].key;
       if (item === "editLines") { s.screen = "lines"; s.line = clamp(s.line, lines.length - 1); s.idx = 0; }
       else if (item === "colors") {
-        s.themeIdx = (THEMES.indexOf(cfg.theme ?? null) + 1 + THEMES.length) % THEMES.length;
-        if (THEMES[s.themeIdx]) cfg.theme = THEMES[s.themeIdx]; else delete cfg.theme;
-        s.status = tr("ui.msg.theme", cfg.theme ?? "-");
+        s.screen = "themes";
+        s.themeIdx = Math.max(0, THEMES.indexOf(cfg.theme ?? null));
       } else if (item === "powerline") {
         cfg.powerline = { ...(cfg.powerline ?? {}), enabled: !cfg.powerline?.enabled };
         if (cfg.powerline.enabled && !cfg.powerline.separators) {
@@ -211,12 +224,28 @@ function applyKeyInner(state, key) {
         cfg.global = { ...(cfg.global ?? {}), minimalist: !cfg.global?.minimalist };
         s.status = tr("ui.msg.minimalist", tr(cfg.global.minimalist ? "ui.on" : "ui.off"));
       } else if (item === "install") {
-        if (state.hooks?.install) s.status = state.hooks.install();
-        else s.status = tr("ui.msg.installHint");
+        if (state.hooks?.install) {
+          const res = state.hooks.install({});
+          if (res?.conflict) s.confirm = { kind: "install", command: res.conflict, choice: 0 };
+          else s.status = res?.message ?? "";
+        } else s.status = tr("ui.msg.installHint");
       } else if (item === "exit") {
-        if (dirtyOf(s)) s.confirm = { choice: 0 }; else s.done = true;
+        if (dirtyOf(s)) s.confirm = { kind: "quit", choice: 0 }; else s.done = true;
       }
     }
+    return s;
+  }
+
+  // ── themes screen ──
+  if (s.screen === "themes") {
+    if (key.name === "up" || key.name === "k") s.themeIdx = clamp(s.themeIdx - 1, THEMES.length - 1);
+    else if (key.name === "down" || key.name === "j") s.themeIdx = clamp(s.themeIdx + 1, THEMES.length - 1);
+    else if (key.name === "return") {
+      const theme = THEMES[s.themeIdx];
+      if (theme) cfg.theme = theme; else delete cfg.theme;
+      s.status = tr("ui.msg.theme", theme ?? "-");
+      s.screen = "main";
+    } else if (key.name === "escape") s.screen = "main";
     return s;
   }
 
@@ -228,7 +257,8 @@ function applyKeyInner(state, key) {
     else if (key.name === "a") { lines.splice(s.line + 1, 0, []); s.line += 1; s.status = tr("ui.lineAdded", s.line + 1); }
     else if (key.name === "d") {
       if (lines.length > 1) { lines.splice(s.line, 1); s.line = clamp(s.line, lines.length - 1); s.status = tr("ui.lineDeleted", s.line + 1); }
-    } else if (key.name === "escape") s.screen = "main";
+      else s.status = tr("ui.msg.keepLine");
+    } else if (key.name === "escape" || key.name === "q") s.screen = "main";
     return s;
   }
 
@@ -296,6 +326,7 @@ function applyKeyInner(state, key) {
       s.saveNow = true;
       break;
     case "escape":
+    case "q":
       s.screen = "lines";
       s.grab = false;
       break;
@@ -430,7 +461,7 @@ export function renderScreen(state, size = {}) {
       const key = `desc.${curWidget(state).type}`;
       const own = tr(key);
       desc = own === key ? tr("ui.widgetDesc", widgetTitle(lang, curWidget(state))) : own;
-    } else desc = "";
+    } else desc = tr("ui.msg.emptyLine");
   } else if (state.screen === "picker") {
     title = `${tr("ui.editLine", state.line + 1)} [${state.pick === "append" ? "ADD WIDGET" : "INSERT WIDGET"}]`;
     hint1 = tr("ui.pickerKeys");
@@ -441,10 +472,19 @@ export function renderScreen(state, size = {}) {
       const num = String(i + 1).padStart(2, " ");
       return { text: `${i === active ? `${CYAN}\u25b6${RESET}` : " "} ${num}. ${name}`, active: i === active };
     });
-    if (state.pickStage === "type" && list[state.pickIdx]) {
+    if (!list.length) desc = tr("ui.msg.noMatch");
+    else if (state.pickStage === "type" && list[state.pickIdx]) {
       const key = `desc.${list[state.pickIdx]}`;
       desc = tr(key) === key ? tr("ui.widgetDesc", label(lang, list[state.pickIdx])) : tr(key);
     } else desc = tr("ui.searchAll");
+  } else if (state.screen === "themes") {
+    title = tr("ui.themes");
+    hint1 = tr("ui.themesKeys");
+    rows = THEMES.map((theme, i) => ({
+      text: `${i === state.themeIdx ? `${CYAN}\u25b6${RESET}` : " "}  ${tr(`ui.theme.${theme ?? "none"}`)}${(cfg.theme ?? null) === theme ? ` ${GREEN}\u2713${RESET}` : ""}`,
+      active: i === state.themeIdx,
+    }));
+    desc = "";
   } else if (state.screen === "colors") {
     title = tr("ui.colour");
     hint1 = tr("ui.colourKeys");
@@ -504,9 +544,13 @@ export function renderScreen(state, size = {}) {
   if (state.status) out.push(`  ${GREEN}${state.status}${RESET}`);
 
   if (state.confirm) {
-    const options = [tr("ui.confirm.save"), tr("ui.confirm.discard"), tr("ui.confirm.cancel")];
+    const isInstall = state.confirm.kind === "install";
+    const options = isInstall
+      ? [tr("ui.confirm.overwrite"), tr("ui.confirm.cancel")]
+      : [tr("ui.confirm.save"), tr("ui.confirm.discard"), tr("ui.confirm.cancel")];
     out.push("");
-    out.push(`  ${BOLD}${tr("ui.confirm.title")}${RESET}`);
+    out.push(`  ${BOLD}${tr(isInstall ? "ui.confirm.overwriteTitle" : "ui.confirm.title")}${RESET}`);
+    if (isInstall) out.push(`  ${DIM}${state.confirm.command}${RESET}`);
     options.forEach((text, i) => {
       out.push(`  ${i === state.confirm.choice ? `${CYAN}\u25b6${RESET}` : " "}  ${i === state.confirm.choice ? `${BOLD}${text}${RESET}` : text}`);
     });

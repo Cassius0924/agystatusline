@@ -155,7 +155,9 @@ Edit Line 1
 - `g` toggles the editor language (English / Chinese); rendered output is never translated.
 - **No separate install step**: the `📦 Install to agy` menu entry writes agy's
   `~/.gemini/antigravity-cli/settings.json` in place (backup + self-check) and turns into
-  `✅ agy is wired up` once it is. `agystatusline init` does exactly the same thing for scripts.
+  `✅ agy is wired up` once it is. If another status line is already configured it asks
+  in a dialog before overwriting instead of telling you to rerun a command.
+  `agystatusline init` does the same thing for scripts and prompts `[y/N]` on a terminal.
 
 Layout config lives in `~/.config/agystatusline/settings.json` (respects `XDG_CONFIG_HOME`),
 the same split ccstatusline uses: tool config in `~/.config/ccstatusline/settings.json`,

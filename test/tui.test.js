@@ -235,7 +235,7 @@ test("the unsaved marker shows up in the title line", () => {
 
 test("the install item wires agy in place instead of asking for init", () => {
   let called = 0;
-  const hooks = { isWired: () => false, install: () => { called += 1; return "wired ok"; } };
+  const hooks = { isWired: () => false, install: () => { called += 1; return { ok: true, message: "wired ok" }; } };
   let s = initialState(base(), hooks);
   const menu = screenOf(s);
   assert.match(menu, /📦 Install to agy/);
@@ -251,4 +251,85 @@ test("once wired the item says so", () => {
   const out = screenOf(initialState(base(), { isWired: () => true }));
   assert.match(out, /✅ agy is wired up/);
   assert.doesNotMatch(out, /📦 Install to agy/);
+});
+
+test("a taken statusLine opens an in-editor overwrite dialog", () => {
+  const calls = [];
+  const hooks = {
+    isWired: () => false,
+    install: (opts) => {
+      calls.push(opts);
+      if (opts?.force) return { ok: true, message: "wired now" };
+      return { ok: false, conflict: "~/.gemini/antigravity-cli/statusline.sh", message: "taken" };
+    },
+  };
+  let s = initialState(base(), hooks);
+  for (let i = 0; i < 4; i += 1) s = applyKey(s, { name: "down" });
+  s = applyKey(s, { name: "return" });
+  assert.equal(s.confirm.kind, "install");
+  assert.match(screenOf(s), /already has a statusLine/);
+  assert.match(screenOf(s), /statusline\.sh/);
+
+  // Esc cancels without forcing
+  assert.equal(applyKey(s, { name: "escape" }).confirm, null);
+  assert.equal(calls.length, 1);
+
+  // Enter on the first option overwrites
+  s = applyKey(s, { name: "return" });
+  assert.deepEqual(calls[1], { force: true });
+  assert.equal(s.status, "wired now");
+  assert.equal(s.done, false);
+
+  // the second option just cancels
+  let t = initialState(base(), hooks);
+  for (let i = 0; i < 4; i += 1) t = applyKey(t, { name: "down" });
+  t = applyKey(t, { name: "return" });
+  t = applyKey(t, { name: "down" });
+  t = applyKey(t, { name: "return" });
+  assert.equal(t.confirm, null);
+  assert.equal(calls.length, 3);
+  assert.equal(calls[2].force, undefined);
+});
+
+test("the theme screen lists every theme and applies the chosen one", () => {
+  let s = applyKey(initialState(base()), { name: "down" }); // Theme
+  s = applyKey(s, { name: "return" });
+  assert.equal(s.screen, "themes");
+  const out = screenOf(s);
+  assert.match(out, /aurora/);
+  assert.match(out, /none \(plain\)/);
+  s = applyKey(s, { name: "up" });
+  s = applyKey(s, { name: "return" });
+  assert.equal(s.config.theme, "paper");
+  assert.equal(s.screen, "main");
+});
+
+test("deleting the only line explains itself instead of doing nothing", () => {
+  let s = initialState({ lines: [[{ type: "model" }]] });
+  s = applyKey(s, { name: "return" });
+  s = applyKey(s, { name: "d" });
+  assert.equal(s.config.lines.length, 1);
+  assert.match(screenOf(s), /last line cannot be deleted/);
+});
+
+test("q goes back a level, and s saves from any list screen", () => {
+  let s = applyKey(initialState(base()), { name: "return" }); // lines
+  assert.equal(s.screen, "lines");
+  assert.equal(applyKey(s, { name: "q" }).screen, "main");
+  assert.equal(applyKey(s, { name: "s:save" }).saveNow, true);
+  s = applyKey(s, { name: "return" }); // edit
+  assert.equal(applyKey(s, { name: "q" }).screen, "lines");
+  assert.equal(applyKey(s, { name: "s:save" }).saveNow, true);
+});
+
+test("a search with no hits says so, and an empty line explains itself", () => {
+  let s = applyKey(openEditor(), { name: "a" });
+  s = applyKey(s, { name: "return" });
+  for (const ch of "zzz") s = applyKey(s, { name: ch, sequence: ch });
+  assert.match(screenOf(s), /no widget matches/);
+
+  let empty = initialState({ lines: [[]] });
+  empty = applyKey(empty, { name: "return" });
+  empty = applyKey(empty, { name: "return" });
+  assert.match(screenOf(empty), /empty line/);
 });
