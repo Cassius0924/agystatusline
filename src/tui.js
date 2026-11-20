@@ -9,7 +9,7 @@ import { WIDGETS, renderLines } from "./render.js";
 import { demoCtx } from "./demo.js";
 import { detectLang, translator, widgetName } from "./i18n.js";
 
-const VERSION = "0.6.3";
+const VERSION = "0.6.4";
 const THEMES = ["aurora", "mono", "paper", null];
 export const SWATCHES = [
   null, "brightBlue", "brightMagenta", "brightCyan", "brightGreen", "brightYellow",
