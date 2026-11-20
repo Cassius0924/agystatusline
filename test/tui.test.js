@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyKey, initialState, PICKER, SWATCHES, saveConfig } from "../src/tui.js";
+import { applyKey, initialState, PICKER, SWATCHES, saveConfig, markSaved } from "../src/tui.js";
 
 const base = () => ({
   lines: [
@@ -165,6 +165,47 @@ test("saveConfig reports a failure instead of throwing", () => {
   assert.ok(err.length > 0);
 });
 
-test("q ends the session", () => {
-  assert.equal(applyKey(initialState(base()), key("q")).done, true);
+test("edits do not save themselves: dirty is derived from the snapshot", () => {
+  let s = initialState(base());
+  assert.equal(s.dirty, false);
+  s = applyKey(s, key("x"));
+  assert.equal(s.dirty, true);
+  s = markSaved(s);
+  assert.equal(s.dirty, false);
+});
+
+test("s marks the session for saving without quitting", () => {
+  const s = applyKey(initialState(base()), key("s:save"));
+  assert.equal(s.saveNow, true);
+  assert.notEqual(s.done, true);
+});
+
+test("q with no changes exits immediately", () => {
+  const s = applyKey(initialState(base()), key("q"));
+  assert.equal(s.done, true);
+  assert.equal(s.mode, "list");
+});
+
+test("q with unsaved changes asks first", () => {
+  let s = applyKey(initialState(base()), key("x")); // delete a widget
+  s = applyKey(s, key("q"));
+  assert.equal(s.mode, "confirm");
+  assert.notEqual(s.done, true);
+  assert.equal(s.confirm, 0);
+});
+
+test("the quit dialog can save, discard or cancel", () => {
+  const dirty = applyKey(initialState(base()), key("x"));
+
+  const saveAndExit = applyKey(applyKey(dirty, key("q")), key("return"));
+  assert.equal(saveAndExit.saveNow, true);
+  assert.equal(saveAndExit.done, true);
+
+  const discard = applyKey(applyKey(applyKey(dirty, key("q")), key("down")), key("return"));
+  assert.equal(discard.done, true);
+  assert.notEqual(discard.saveNow, true);
+
+  const cancel = applyKey(applyKey(applyKey(dirty, key("q")), key("down")), key("escape"));
+  assert.equal(cancel.mode, "list");
+  assert.notEqual(cancel.done, true);
 });

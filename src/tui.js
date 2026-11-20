@@ -33,8 +33,16 @@ export const PICKER = [
   "separator", "flex-separator", "custom-text",
 ].filter((type) => WIDGETS[type]);
 
+const snapshot = (config) => JSON.stringify(config);
+const dirtyOf = (state) => snapshot(state.config) !== state.original;
+
+// Call after a successful write: the current config becomes the new baseline.
+export const markSaved = (state) => ({ ...state, original: snapshot(state.config), dirty: false });
+
 export const initialState = (config, pick = 0) => ({
   config,
+  original: snapshot(config),
+  confirm: 0, // 0 = save & exit, 1 = exit without saving, 2 = cancel
   line: 0,
   idx: 0,
   mode: "list", // list | picker | colors | label | presets | help
@@ -51,11 +59,28 @@ const clamp = (n, max) => Math.max(0, Math.min(max, n));
 
 // Pure key → state transition. The terminal loop below only draws it.
 export function applyKey(state, key) {
+  const next = applyKeyInner(state, key);
+  next.dirty = dirtyOf(next);
+  return next;
+}
+
+function applyKeyInner(state, key) {
   const cfg = state.config;
   const lines = cfg.lines ?? [];
   const s = { ...state, config: cfg, dirty: false, status: "" };
   const line = lines[s.line] ?? [];
   const current = line[s.idx];
+
+  if (s.mode === "confirm") {
+    if (key.name === "up" || key.name === "down" || key.name === "left" || key.name === "right") s.confirm = (s.confirm + 1) % 3;
+    else if (key.name === "escape") { s.mode = "list"; s.confirm = 0; }
+    else if (key.name === "return") {
+      if (s.confirm === 0) { s.saveNow = true; s.done = true; }
+      else if (s.confirm === 1) s.done = true;
+      else { s.mode = "list"; s.confirm = 0; }
+    }
+    return s;
+  }
 
   if (s.mode === "help") {
     s.mode = "list";
@@ -243,7 +268,11 @@ export function applyKey(state, key) {
       break;
     case "q":
     case "escape":
-      s.done = true;
+      if (dirtyOf(s)) { s.mode = "confirm"; s.confirm = 0; }
+      else s.done = true;
+      break;
+    case "s:save":
+      s.saveNow = true;
       break;
     default:
       break;
@@ -339,7 +368,11 @@ function detailRows(state) {
   const alone = renderLines({ ...state.config, lines: [[w]] }, ctx, { color: true, width: 120, now: ctx.now });
   const pad = (word) => word.padEnd(7);
   return [
-    `${DIM}${pad(tr("ui.type"))}${RESET} ${BOLD}${widgetName(detectLang(state.config), w.type)}${RESET} ${DIM}${w.type}${RESET}`,
+    (() => {
+      const name = widgetName(detectLang(state.config), w.type);
+      const suffix = name === w.type ? "" : ` ${DIM}${w.type}${RESET}`;
+      return `${DIM}${pad(tr("ui.type"))}${RESET} ${BOLD}${name}${RESET}${suffix}`;
+    })(),
     `${DIM}${pad(tr("ui.colour"))}${RESET} ${w.color ? paintFg(w.color, w.color) : `${DIM}${tr("ui.auto")}${RESET}`}`,
     `${DIM}${pad(tr("ui.label"))}${RESET} ${w.label ?? `${DIM}\u2014${RESET}`}`,
     `${DIM}${pad(tr("ui.raw"))}${RESET} ${w.raw ? tr("ui.on") : `${DIM}${tr("ui.off")}${RESET}`}`,
@@ -365,7 +398,8 @@ function draw(state) {
     word("minimal", cfg.global?.minimalist),
     word("bold", cfg.global?.bold),
   ].join(`${DIM} \u00b7 ${RESET}`);
-  out.push(top("agystatusline", W, flags));
+  const flagText = state.dirty ? `${GREEN}${tr("ui.unsaved")}${RESET}${DIM} \u00b7 ${RESET}${flags}` : flags;
+  out.push(top("agystatusline", W, flagText));
 
   const preview = renderLines(cfg, demoCtx(W - 4), { color: true, width: W - 4, now: "14:05" }) || `${DIM}${tr("ui.emptyLayout")}${RESET}`;
   upLines(preview).forEach((l) => out.push(row(l, W)));
@@ -436,7 +470,12 @@ function draw(state) {
   }
   out.push(mid(W));
 
-  if (state.mode === "colors") {
+  if (state.mode === "confirm") {
+    out.push(row(`${BOLD}${tr("ui.confirm.title")}${RESET}`, W));
+    const options = [tr("ui.confirm.save"), tr("ui.confirm.discard"), tr("ui.confirm.cancel")];
+    options.forEach((label, i) => out.push(row(`${i === state.confirm ? INVERSE : ""}${i === state.confirm ? "\u25b8" : " "} ${label}${RESET}`, W)));
+    out.push(row(`${DIM}\u2191\u2193 Enter \u00b7 Esc cancel${RESET}`, W));
+  } else if (state.mode === "colors") {
     const swatches = SWATCHES.map((c, i) => {
       const label = c === null ? tr("ui.auto") : c.replace(/^bright/, "").slice(0, 9);
       const cell = `${paintSwatch(c)} ${paintFg(label, c)}`;
@@ -464,7 +503,7 @@ function draw(state) {
     out.push(row(`${DIM}${tr("ui.keys2")}${RESET}`, W));
   }
 
-  out.push(row(state.status ? `${GREEN}${state.status}${RESET}` : `${DIM}${state.dirty ? tr("ui.saved") : ""}${RESET}`, W));
+  out.push(row(state.status ? `${GREEN}${state.status}${RESET}` : "", W));
   out.push(bottom(W));
   return CLEAR + out.join("\n") + "\n";
 }
@@ -486,9 +525,20 @@ export function saveConfig(path, config) {
 export function runTUI(configPath, config) {
   const stdin = process.stdin;
   let state = initialState(config);
+  const tr = () => translator(detectLang(state.config));
+
+  // Saving is explicit (s / Ctrl+S, or "Save & Exit" in the quit dialog), the
+  // same model as ccstatusline: edits live in memory until you ask for them to
+  // be written.
   const save = () => {
+    const before = JSON.stringify(state.config);
     const err = saveConfig(configPath, state.config);
-    if (err) state = { ...state, status: `save failed: ${err}` };
+    if (err) {
+      state = { ...state, status: `${tr()("ui.save")} failed: ${err}` };
+      return false;
+    }
+    state = { ...markSaved(state), status: tr()("ui.msg.saved", configPath) };
+    return true;
   };
 
   emitKeypressEvents(stdin);
@@ -508,11 +558,17 @@ export function runTUI(configPath, config) {
     let name = (key.name ?? "").toLowerCase();
     if (key.shift && (name === "up" || name === "down")) name = `shift${name[0].toUpperCase()}${name.slice(1)}`;
     else if (key.shift && (name === "j" || name === "k")) name = name.toUpperCase();
+    if (name === "s") name = "s:save"; // s or Ctrl+S
     state = applyKey(state, { ...key, name, sequence: key.sequence ?? str });
-    if (state.dirty) save();
+
+    if (state.saveNow) {
+      save();
+      state = { ...state, saveNow: false };
+    }
     if (state.done) {
+      const saved = !state.dirty;
       cleanup();
-      process.stdout.write(`saved ${configPath}\n`);
+      process.stdout.write(saved ? `${tr()("ui.saved")} ${configPath}\n` : `${tr()("ui.msg.quitUnsaved")}\n`);
       return;
     }
     process.stdout.write(draw(state));

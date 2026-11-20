@@ -117,7 +117,7 @@ Run it with no arguments in a terminal (or `agystatusline edit`):
 - `Enter`/`c` opens a **colour picker with live swatches** (`←→` choose, Enter apply — first entry returns the widget to auto).
 - `l` edits the widget **label** inline, `r` toggles raw values, `o` opens the **preset picker**, `?` shows the full key map.
 - The preview pane uses the same renderer as the live status line, so what you see is what agy draws.
-- Every keypress saves; the next agy refresh (≤300 ms) shows the change.
+- **Saving is explicit**, like ccstatusline: edits live in memory, the header shows `unsaved changes`, `s` (or `Ctrl+S`) writes them, and quitting with unsaved edits asks *Save & Exit / Exit without saving / Cancel*. agy's next refresh picks the file up.
 
 ## Commands
 
@@ -126,7 +126,7 @@ Run it with no arguments in a terminal (or `agystatusline edit`):
 | `agystatusline` | render from stdin (what agy calls) |
 | `agystatusline init [--force]` | write the default config + wire agy settings |
 | `agystatusline preset [default\|minimal\|powerline\|git]` | switch layout, previews it |
-| `agystatusline edit` (or no args in a TTY) | interactive editor |
+| `agystatusline edit` (or no args in a TTY) | interactive editor (`s` save, `q` quit) |
 | `agystatusline config` | print the config path |
 | `agystatusline --demo` | render a sample payload |
 | `agystatusline --version` | print the version |
