@@ -11,6 +11,11 @@ npx -y @cassius0924/agystatusline init          # writes the config + wires agy'
 npx -y @cassius0924/agystatusline preset powerline   # or: default | minimal | git
 ```
 
+> Behind a registry mirror (npmmirror, corporate proxy)? The mirror's `latest` tag can lag behind npm by minutes to hours, so `npx` may install an older version. Either wait for the sync or bypass the mirror for this command:
+> ```bash
+> npx -y --registry=https://registry.npmjs.org @cassius0924/agystatusline@latest
+> ```
+
 `init` refuses to replace an existing `statusLine` unless you pass `--force`; it backs `settings.json` up to `settings.json.agystatusline.bak` and runs a self-check through the same command it just wired.
 
 ## How it works
