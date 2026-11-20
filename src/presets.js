@@ -7,6 +7,8 @@ export const PRESETS = {
   default: {
     lines: [
       [
+        { type: "agent-state" },
+        { type: "separator" },
         { type: "model", color: "brightBlue" },
         { type: "custom-text", customText: " " },
         { type: "thinking-effort", color: "brightBlue" },
@@ -27,7 +29,7 @@ export const PRESETS = {
         { type: "conversation-id", color: "brightBlack", metadata: { full: true } },
       ],
       [
-        { type: "custom-text", customText: "Session: " },
+        { type: "custom-text", customText: "5-hour: " },
         { type: "session-usage" },
         { type: "custom-text", customText: " x " },
         { type: "reset-timer", color: "brightBlack" },

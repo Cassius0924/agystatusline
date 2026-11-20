@@ -10,7 +10,7 @@ import { PRESETS, PRESET_NAMES, applyPreset } from "./presets.js";
 import { demoCtx } from "./demo.js";
 import { detectLang, translator, widgetName } from "./i18n.js";
 
-const VERSION = "0.8.0";
+const VERSION = "0.8.1";
 const THEMES = ["aurora", "mono", "paper", null];
 export const SWATCHES = [
   null, "brightBlue", "brightMagenta", "brightCyan", "brightGreen", "brightYellow",
@@ -144,8 +144,11 @@ function applyKeyInner(state, key) {
   }
   if (s.screen === "label") {
     if (key.name === "return" && w) {
-      if (s.input.trim()) w.label = s.input.trim(); else delete w.label;
-      s.status = w.label ? tr("ui.msg.label", w.label) : tr("ui.msg.labelCleared");
+      const field = s.textField ?? "label";
+      const value = s.input.replace(/\s+$/, "");
+      if (value) w[field] = value; else delete w[field];
+      if (field === "label") s.status = w.label ? tr("ui.msg.label", w.label) : tr("ui.msg.labelCleared");
+      else s.status = value ? tr("ui.msg.text", value) : "";
       s.screen = "edit";
     } else if (key.name === "escape") s.screen = "edit";
     else if (key.name === "backspace") s.input = s.input.slice(0, -1);
@@ -333,8 +336,18 @@ function applyKeyInner(state, key) {
       if (w) { s.colorIdx = Math.max(0, SWATCHES.indexOf(w.color ?? null)); s.screen = "colors"; }
       break;
     case "l":
-      if (w) { s.input = w.label ?? ""; s.screen = "label"; }
+      if (w) { s.textField = "label"; s.input = w.label ?? ""; s.screen = "label"; }
       break;
+    case "e": {
+      // custom text / plain text / symbol carry their own string; separators
+      // carry a character. Everything else has nothing to type into.
+      const field = { "custom-text": "customText", text: "customText", symbol: "customSymbol", separator: "character" }[w?.type];
+      if (!field) { s.status = tr("ui.msg.noText"); break; }
+      s.textField = field;
+      s.input = w[field] ?? (field === "character" ? "|" : "");
+      s.screen = "label";
+      break;
+    }
     case "left":
     case "right":
       if (w) { s.screen = "picker"; s.pick = "change"; s.pickStage = "cat"; s.search = ""; }
@@ -533,10 +546,11 @@ export function renderScreen(state, size = {}) {
     }
     desc = tr("ui.chooseApply");
   } else if (state.screen === "label") {
-    title = tr("ui.label");
-    hint1 = tr("ui.labelKeys");
+    const editingText = state.textField && state.textField !== "label";
+    title = tr(editingText ? "ui.text" : "ui.label");
+    hint1 = tr(editingText ? "ui.textKeys" : "ui.labelKeys");
     rows = [{ text: `${state.input}${INVERSE} ${RESET}`, active: false }];
-    desc = tr("ui.typeLabel");
+    desc = tr(editingText ? "ui.typeText" : "ui.typeLabel");
   } else {
     // main menu — ccstatusline's grouping: edit, looks, then settings, then exit
     const items = menuItems(state);

@@ -129,7 +129,7 @@ choice in the box above before you press Enter.
 
 | preset | shape |
 | --- | --- |
-| `default` | three rows: `model ⎇ branch (+0,-0)`, `Ctx … Cache Hit … id`, `Session: … x … Weekly: … x …` |
+| `default` | three rows: `READY \| model ⎇ branch (+0,-0)`, `Ctx … Cache Hit … <uuid>`, `5-hour: … x … \| Weekly: … x …` |
 | `compact` | one row, state → title → model → branch → changes → context |
 | `standard` | two rows: the working line, then context + 5h/weekly quota |
 | `minimal` | one row: model + context percentage |
@@ -155,8 +155,9 @@ Edit Line 1
 - `(a)` appends, `(i)` inserts after the cursor — both open the **widget picker** with
   categories (Core / Git / Environment / Tokens / Cache / Context / Usage / Layout) and
   type-to-search over every widget.
-- `o` opens the colour picker with live swatches, `l` edits the widget label, `r` toggles
-  raw values, `c` clears the line.
+- `o` opens the colour picker with live swatches, `e` edits the text a widget prints
+  (custom text, separators, symbols), `l` edits the widget label, `r` toggles raw values,
+  `c` clears the line.
 - The preview box uses the same renderer as the live status line, so what you see is what
   agy draws; in the editor the selected widget is underlined in it.
 - **Saving is explicit**, like ccstatusline: edits live in memory, the title line shows

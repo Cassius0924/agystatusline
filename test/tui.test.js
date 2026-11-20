@@ -380,3 +380,39 @@ test("the editor preview underlines the widget being edited", () => {
   assert.match(second, /\x1b\[4m(\x1b\[[0-9;]+m)?main/);
   assert.doesNotMatch(second, /\x1b\[4m(\x1b\[[0-9;]+m)?Gemini/);
 });
+
+test("e edits the text a custom-text widget prints", () => {
+  let s = initialState({ lines: [[{ type: "model" }, { type: "custom-text", customText: " " }]] });
+  s = applyKey(s, { name: "return" });
+  s = applyKey(s, { name: "return" }); // edit line 1
+  s = applyKey(s, { name: "down" }); // the custom-text widget
+  s = applyKey(s, { name: "e" });
+  assert.equal(s.screen, "label");
+  assert.equal(s.textField, "customText");
+  assert.equal(s.input, " ");
+  s = applyKey(s, { name: "backspace" }); // clear the spacer
+  for (const ch of "x ") s = applyKey(s, { name: ch, sequence: ch });
+  s = applyKey(s, { name: "return" });
+  assert.equal(s.config.lines[0][1].customText, "x");
+  assert.equal(s.screen, "edit");
+});
+
+test("e edits a separator character and refuses on widgets without text", () => {
+  let s = initialState({ lines: [[{ type: "separator", character: "|" }, { type: "model" }]] });
+  s = applyKey(s, { name: "return" });
+  s = applyKey(s, { name: "return" });
+  s = applyKey(s, { name: "e" });
+  assert.equal(s.textField, "character");
+  assert.equal(s.input, "|");
+  s = applyKey(s, { name: "backspace" });
+  s = applyKey(s, { name: "backspace" });
+  s = applyKey(s, { name: "/", sequence: "/" });
+  s = applyKey(s, { name: "return" });
+  assert.equal(s.config.lines[0][0].character, "/");
+
+  let t = applyKey(initialState({ lines: [[{ type: "model" }]] }), { name: "return" });
+  t = applyKey(t, { name: "return" });
+  t = applyKey(t, { name: "e" });
+  assert.equal(t.screen, "edit");
+  assert.match(screenOf(t), /no editable text/);
+});

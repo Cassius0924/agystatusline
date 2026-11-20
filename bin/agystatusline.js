@@ -13,7 +13,7 @@ import { DEMO_PAYLOAD, DEMO_GIT, demoCtx } from "../src/demo.js";
 import { runTUI } from "../src/tui.js";
 import { PRESETS, PRESET_NAMES, applyPreset } from "../src/presets.js";
 
-const VERSION = "0.8.0";
+const VERSION = "0.8.1";
 const HOME = homedir();
 const CACHE_DIR = process.env.XDG_CACHE_HOME
   ? join(process.env.XDG_CACHE_HOME, "agystatusline")
