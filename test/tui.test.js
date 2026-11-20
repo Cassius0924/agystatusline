@@ -101,10 +101,10 @@ test("typing filters the picker", () => {
 });
 
 test("k clones and m merges the selected widget", () => {
-  let s = applyKey(openEditor(), key("k:clone"));
+  let s = applyKey(openEditor(), key("k"));
   assert.equal(s.config.lines[0].length, 3);
   assert.equal(s.config.lines[0][1].type, "model");
-  s = applyKey(s, key("m:merge"));
+  s = applyKey(s, key("m"));
   assert.equal(s.config.lines[0].length, 2);
 });
 
@@ -198,7 +198,7 @@ test("the line list shows widget counts and a way back", () => {
   const out = screenOf(applyKey(initialState(base()), { name: "return" }));
   assert.match(out, /Select Line to Edit Items/);
   assert.match(out, /☰ Line 1 \(2 widgets\)/);
-  assert.match(out, /☰ Line 2 \(1 widgets\)/);
+  assert.match(out, /☰ Line 2 \(1 widget\)/);
   assert.match(out, /← Back/);
 });
 

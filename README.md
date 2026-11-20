@@ -102,7 +102,7 @@ ccstatusline: a title line, a preview box, then a plain list with a `▶` cursor
 one-line description underneath.
 
 ```
-agystatusline | v0.6.0
+agystatusline | v0.6.1
 ╭──────────────────────────────────────────────────────────────────────╮
 │ > Preview  (ctrl+s to save configuration at any time)                │
 ╰──────────────────────────────────────────────────────────────────────╯

@@ -9,7 +9,7 @@ import { WIDGETS, renderLines } from "./render.js";
 import { demoCtx } from "./demo.js";
 import { detectLang, translator, widgetName } from "./i18n.js";
 
-const VERSION = "0.6.0";
+const VERSION = "0.6.1";
 const THEMES = ["aurora", "mono", "paper", null];
 export const SWATCHES = [
   null, "brightBlue", "brightMagenta", "brightCyan", "brightGreen", "brightYellow",
@@ -242,11 +242,9 @@ function applyKeyInner(state, key) {
 
   switch (key.name) {
     case "up":
-    case "k":
       if (inGrab) move(-1); else s.idx = clamp(s.idx - 1, line.length - 1);
       break;
     case "down":
-    case "j":
       if (inGrab) move(1); else s.idx = clamp(s.idx + 1, line.length - 1);
       break;
     case "return":
@@ -258,7 +256,7 @@ function applyKeyInner(state, key) {
     case "i":
       s.screen = "picker"; s.pick = "insert"; s.pickStage = "cat"; s.search = "";
       break;
-    case "k:clone":
+    case "k":
       if (w) { line.splice(s.idx + 1, 0, JSON.parse(JSON.stringify(w))); s.idx += 1; s.status = tr("ui.cloned", w.type); }
       break;
     case "d":
@@ -276,7 +274,7 @@ function applyKeyInner(state, key) {
     case "r":
       if (w) { w.raw = !w.raw; if (!w.raw) delete w.raw; s.status = tr("ui.msg.raw", tr(w.raw ? "ui.on" : "ui.off")); }
       break;
-    case "m:merge":
+    case "m":
       if (w && s.idx < line.length - 1) {
         const next = line[s.idx + 1];
         line.splice(s.idx + 1, 1);
@@ -413,7 +411,7 @@ export function renderScreen(state, size = {}) {
     hint1 = tr("ui.selectLineHint");
     hint2 = tr("ui.linesKeys");
     rows = lines.map((line, i) => ({
-      text: `${i === state.line ? `${CYAN}\u25b6${RESET}` : " "}  \u2630 ${lang === "zh" ? `第 ${i + 1} 行` : `Line ${i + 1}`} ${DIM}(${line.length} widgets)${RESET}`,
+      text: `${i === state.line ? `${CYAN}\u25b6${RESET}` : " "}  \u2630 ${lang === "zh" ? `第 ${i + 1} 行` : `Line ${i + 1}`} ${DIM}(${line.length} widget${line.length === 1 ? "" : "s"})${RESET}`,
       active: i === state.line,
     }));
     rows.push({ text: "", active: false });
@@ -437,11 +435,15 @@ export function renderScreen(state, size = {}) {
     hint1 = tr("ui.pickerKeys");
     const list = typesInStage(state);
     const active = state.pickStage === "cat" ? state.catIdx : state.pickIdx;
-    rows = list.map((item, i) => ({
-      text: `${i === active ? `${CYAN}\u25b6${RESET}` : " "}  ${state.pickStage === "cat" ? (tr(`cat.${item}`) === `cat.${item}` ? item : tr(`cat.${item}`)) : label(lang, item)}`,
-      active: i === active,
-    }));
-    desc = `${tr("ui.search")}: ${state.search || tr("ui.searchNone")}`;
+    rows = list.map((item, i) => {
+      const name = state.pickStage === "cat" ? (tr(`cat.${item}`) === `cat.${item}` ? item : tr(`cat.${item}`)) : label(lang, item);
+      const num = String(i + 1).padStart(2, " ");
+      return { text: `${i === active ? `${CYAN}\u25b6${RESET}` : " "} ${num}. ${name}`, active: i === active };
+    });
+    if (state.pickStage === "type" && list[state.pickIdx]) {
+      const key = `desc.${list[state.pickIdx]}`;
+      desc = tr(key) === key ? tr("ui.widgetDesc", label(lang, list[state.pickIdx])) : tr(key);
+    } else desc = tr("ui.searchAll");
   } else if (state.screen === "colors") {
     title = tr("ui.colour");
     hint1 = tr("ui.colourKeys");
@@ -487,10 +489,13 @@ export function renderScreen(state, size = {}) {
   const budget = Math.max(6, totalRows - out.length - 6);
   const activeRow = Math.max(0, rows.findIndex((r) => r.active));
   const start = clamp(activeRow - Math.floor(budget / 2), Math.max(0, rows.length - budget));
+  if (start > 0) out.push(`  ${DIM}\u2191 ${start} ${tr("ui.windowMore")}${RESET}`);
   rows.slice(start, start + budget).forEach((r) => {
     if (r.gapBefore) out.push("");
     out.push(`  ${r.text}`);
   });
+  const rest = rows.length - (start + budget);
+  if (rest > 0) out.push(`  ${DIM}\u2193 ${rest} ${tr("ui.windowMore")}${RESET}`);
 
   out.push("");
   out.push(`  ${DIM}${desc}${RESET}`);
@@ -552,8 +557,6 @@ export function runTUI(configPath, config) {
     let name = (key.name ?? "").toLowerCase();
     if (key.shift && (name === "up" || name === "down")) name = `shift${name[0].toUpperCase()}${name.slice(1)}`;
     if (name === "s") name = "s:save"; // s / ctrl+s saves
-    if (name === "k" && state.screen === "edit" && key.shift) name = "k:clone";
-    if (name === "m" && state.screen === "edit" && key.shift) name = "m:merge";
     state = applyKey(state, { ...key, name, sequence: key.sequence ?? str });
 
     if (state.saveNow) {
