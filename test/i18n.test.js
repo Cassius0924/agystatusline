@@ -25,7 +25,7 @@ test("config language wins over the environment", () => {
 
 test("editor strings are translated, missing keys fall back to the key", () => {
   assert.equal(t("zh", "ui.colour"), "颜色");
-  assert.equal(t("en", "ui.colour"), "colour");
+  assert.equal(t("en", "ui.colour"), "Colour");
   assert.equal(t("zh", "nope.not.a.key"), "nope.not.a.key");
   assert.equal(t("zh", "ui.msg.added", "model"), "已添加 model");
   assert.equal(translator("zh")("ui.msg.deleted", "separator"), "已删除 separator");
@@ -35,7 +35,7 @@ test("widget names are translated for the editor", () => {
   assert.equal(widgetName("zh", "separator"), "分隔符");
   assert.equal(widgetName("zh", "git-branch"), "分支");
   assert.equal(widgetName("zh", "context-percentage-usable"), "上下文百分比");
-  assert.equal(widgetName("en", "separator"), "separator");
+  assert.equal(widgetName("en", "separator"), "Separator");
   assert.equal(widgetName("zh", "unknown-widget"), "unknown-widget");
 });
 

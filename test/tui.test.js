@@ -3,150 +3,161 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyKey, initialState, PICKER, SWATCHES, saveConfig, markSaved } from "../src/tui.js";
+import { applyKey, initialState, PICKER, SWATCHES, saveConfig, markSaved, CATEGORIES } from "../src/tui.js";
 
 const base = () => ({
   lines: [
-    [{ type: "agent-state" }, { type: "model", color: "brightBlue" }],
+    [{ type: "model", color: "brightBlue" }, { type: "git-branch" }],
     [{ type: "context-percentage" }],
   ],
 });
-
 const key = (name, extra = {}) => ({ name, ...extra });
 
-test("the picker offers only widget types the renderer knows", () => {
+// main → lines → edit line 1
+const openEditor = () => {
+  let s = initialState(base());
+  s = applyKey(s, key("return"));
+  s = applyKey(s, key("return"));
+  return s;
+};
+
+test("the picker only offers widget types the renderer knows", () => {
   assert.ok(PICKER.includes("git-branch"));
   assert.ok(PICKER.includes("separator"));
   assert.ok(!PICKER.includes("claude-status"));
+  assert.ok(CATEGORIES.some((c) => c.key === "git"));
 });
 
-test("adding a widget inserts it after the cursor and keeps the picker open until Enter", () => {
-  let s = initialState(base());
-  s = applyKey(s, key("a"));
-  assert.equal(s.mode, "picker");
-  s = applyKey(s, { ...key("return"), });
-  assert.equal(s.mode, "list");
-  assert.equal(s.config.lines[0].length, 3);
-  assert.ok(s.dirty);
+test("main menu opens the line list, then the editor", () => {
+  const lines = applyKey(initialState(base()), key("return"));
+  assert.equal(lines.screen, "lines");
+  const edit = applyKey(lines, key("return"));
+  assert.equal(edit.screen, "edit");
+  assert.equal(edit.idx, 0);
 });
 
-test("delete removes the selected widget and clamps the cursor", () => {
-  let s = initialState(base());
-  s = applyKey(s, key("down")); // model
-  s = applyKey(s, key("x"));
-  assert.deepEqual(s.config.lines[0].map((w) => w.type), ["agent-state"]);
-  assert.equal(s.idx, 0);
+test("edits stay in memory until saved", () => {
+  let s = openEditor();
+  assert.equal(s.dirty, false);
+  s = applyKey(s, key("d"));
+  assert.equal(s.dirty, true);
+  s = markSaved(s);
+  assert.equal(s.dirty, false);
 });
 
-test("J and K reorder the current row", () => {
-  let s = initialState(base());
-  s = applyKey(s, key("J"));
-  assert.deepEqual(s.config.lines[0].map((w) => w.type), ["model", "agent-state"]);
-  s = applyKey(s, key("K"));
-  assert.deepEqual(s.config.lines[0].map((w) => w.type), ["agent-state", "model"]);
+test("s asks for a save without quitting", () => {
+  const s = applyKey(openEditor(), key("s:save"));
+  assert.equal(s.saveNow, true);
+  assert.notEqual(s.done, true);
 });
 
-test("arrow keys move between rows and clamp inside a row", () => {
-  let s = initialState(base());
-  s = applyKey(s, key("right"));
-  assert.equal(s.line, 1);
+test("delete, clear and raw act on the selected widget", () => {
+  let s = openEditor();
+  s = applyKey(s, key("d"));
+  assert.deepEqual(s.config.lines[0].map((w) => w.type), ["git-branch"]);
+  s = applyKey(s, key("r"));
+  assert.equal(s.config.lines[0][0].raw, true);
+  s = applyKey(s, key("c"));
+  assert.deepEqual(s.config.lines[0], []);
+});
+
+test("Enter toggles grab mode and arrows move the widget", () => {
+  let s = openEditor();
+  s = applyKey(s, key("return"));
+  assert.equal(s.grab, true);
   s = applyKey(s, key("down"));
-  assert.equal(s.idx, 0); // one widget only
-  s = applyKey(s, key("left"));
-  assert.equal(s.line, 0);
+  assert.deepEqual(s.config.lines[0].map((w) => w.type), ["git-branch", "model"]);
+  assert.equal(s.idx, 1);
+  s = applyKey(s, key("return"));
+  assert.equal(s.grab, false);
 });
 
-test("n starts a new empty row below and moves the cursor there", () => {
-  let s = initialState(base());
-  s = applyKey(s, key("n"));
+test("a appends through the picker, i inserts after the cursor", () => {
+  let s = openEditor();
+  s = applyKey(s, key("a"));
+  assert.equal(s.screen, "picker");
+  assert.equal(s.pick, "append");
+  s = applyKey(s, key("return")); // category → types
+  assert.equal(s.pickStage, "type");
+  s = applyKey(s, key("return")); // add the first type in "all"
+  assert.equal(s.screen, "edit");
+  assert.equal(s.config.lines[0].length, 3);
+  assert.equal(s.config.lines[0][2].type, PICKER[0]);
+
+  let t = openEditor();
+  t = applyKey(t, key("i"));
+  t = applyKey(t, key("return"));
+  t = applyKey(t, key("down"));
+  t = applyKey(t, key("return"));
+  assert.equal(t.config.lines[0][1].type, PICKER[1]);
+});
+
+test("typing filters the picker", () => {
+  let s = applyKey(openEditor(), key("a"));
+  s = applyKey(s, key("return"));
+  for (const ch of "git") s = applyKey(s, { name: ch, sequence: ch });
+  assert.equal(s.search, "git");
+  assert.equal(s.pickStage, "type");
+});
+
+test("k clones and m merges the selected widget", () => {
+  let s = applyKey(openEditor(), key("k:clone"));
+  assert.equal(s.config.lines[0].length, 3);
+  assert.equal(s.config.lines[0][1].type, "model");
+  s = applyKey(s, key("m:merge"));
+  assert.equal(s.config.lines[0].length, 2);
+});
+
+test("the lines screen adds and deletes rows", () => {
+  let s = applyKey(initialState(base()), key("return"));
+  s = applyKey(s, key("a"));
   assert.equal(s.config.lines.length, 3);
   assert.equal(s.line, 1);
-  assert.deepEqual(s.config.lines[1], []);
+  s = applyKey(s, key("d"));
+  assert.equal(s.config.lines.length, 2);
 });
 
-test("p toggles powerline and seeds the glyphs on first enable", () => {
-  let s = initialState(base());
-  s = applyKey(s, key("p"));
-  assert.equal(s.config.powerline.enabled, true);
-  assert.equal(s.config.powerline.separators[0], String.fromCharCode(0xe0b0));
-  s = applyKey(s, key("p"));
-  assert.equal(s.config.powerline.enabled, false);
-});
-
-test("t cycles themes including the no-theme state", () => {
-  let s = initialState(base());
-  const seen = [];
-  for (let i = 0; i < 5; i += 1) {
-    s = applyKey(s, key("t"));
-    seen.push(s.config.theme ?? null);
-  }
-  assert.ok(seen.includes("aurora"));
-  assert.ok(seen.includes(null));
-});
-
-test("c opens the colour picker and Enter applies the chosen swatch", () => {
-  let s = initialState(base());
-  s = applyKey(s, key("down"));
-  s = applyKey(s, key("c"));
-  assert.equal(s.mode, "colors");
-  assert.equal(s.colorIdx, 1); // current colour preselected
+test("the colour picker applies a swatch to the selected widget", () => {
+  let s = applyKey(openEditor(), key("o"));
+  assert.equal(s.screen, "colors");
   s = applyKey(s, key("right"));
   s = applyKey(s, key("right"));
   const picked = SWATCHES[s.colorIdx];
   s = applyKey(s, key("return"));
-  assert.equal(s.mode, "list");
-  assert.equal(s.config.lines[0][1].color, picked);
-  assert.ok(s.dirty);
+  assert.equal(s.screen, "edit");
+  assert.equal(s.config.lines[0][0].color, picked);
 });
 
-test("colour picker can go back to auto", () => {
-  let s = initialState(base());
-  s = applyKey(s, key("down"));
-  s = applyKey(s, key("c"));
-  s = applyKey(s, key("left")); // to "auto"
-  s = applyKey(s, { name: "left" });
-  s = applyKey(s, { name: "return" });
-  assert.equal(s.config.lines[0][1].color, undefined);
-});
-
-test("label editor types, applies and clears", () => {
-  let s = initialState(base());
-  s = applyKey(s, key("down"));
-  s = applyKey(s, key("l"));
-  assert.equal(s.mode, "label");
-  for (const ch of "M") s = applyKey(s, { name: "m", sequence: ch });
-  s = applyKey(s, { name: "backspace" });
-  for (const ch of "Model") s = applyKey(s, { name: ch.toLowerCase(), sequence: ch });
+test("the label editor types and applies", () => {
+  let s = applyKey(openEditor(), key("l"));
+  assert.equal(s.screen, "label");
+  for (const ch of "Git") s = applyKey(s, { name: ch.toLowerCase(), sequence: ch });
   s = applyKey(s, key("return"));
-  assert.equal(s.config.lines[0][1].label, "Model");
-  s = applyKey(s, key("l"));
-  s = applyKey(s, { name: "backspace" });
-  s = applyKey(s, { name: "backspace" });
-  s = applyKey(s, { name: "backspace" });
-  s = applyKey(s, { name: "backspace" });
-  s = applyKey(s, { name: "backspace" });
-  s = applyKey(s, key("return"));
-  assert.equal(s.config.lines[0][1].label, undefined);
+  assert.equal(s.config.lines[0][0].label, "Git");
 });
 
-test("r toggles raw and o opens the preset picker", () => {
-  let s = initialState(base());
-  s = applyKey(s, key("r"));
-  assert.equal(s.config.lines[0][0].raw, true);
-  s = applyKey(s, key("o"));
-  assert.equal(s.mode, "presets");
-  s = applyKey(s, key("down"));
-  s = applyKey(s, key("return"));
-  assert.equal(s.mode, "list");
-  assert.ok(s.config.lines.length >= 1);
-});
+test("q exits when clean, asks when there are unsaved changes", () => {
+  const clean = applyKey(initialState(base()), key("q"));
+  assert.equal(clean.done, true);
 
-test("? opens help and any key returns", () => {
-  let s = initialState(base());
-  s = applyKey(s, { name: "?" });
-  assert.equal(s.mode, "help");
-  s = applyKey(s, key("x"));
-  assert.equal(s.mode, "list");
+  let dirty = applyKey(openEditor(), key("d"));
+  dirty = applyKey(dirty, key("escape")); // lines
+  dirty = applyKey(dirty, key("escape")); // main
+  dirty = applyKey(dirty, key("q"));
+  assert.ok(dirty.confirm);
+  assert.equal(dirty.done, false);
+
+  const saveAndExit = applyKey(dirty, key("return"));
+  assert.equal(saveAndExit.done, true);
+  assert.equal(saveAndExit.saveNow, true);
+
+  const discard = applyKey(applyKey(dirty, key("down")), key("return"));
+  assert.equal(discard.done, true);
+  assert.notEqual(discard.saveNow, true);
+
+  const cancel = applyKey(dirty, key("escape"));
+  assert.equal(cancel.confirm, null);
+  assert.equal(cancel.done, false);
 });
 
 test("saveConfig creates the config directory on first write", () => {
@@ -165,47 +176,59 @@ test("saveConfig reports a failure instead of throwing", () => {
   assert.ok(err.length > 0);
 });
 
-test("edits do not save themselves: dirty is derived from the snapshot", () => {
-  let s = initialState(base());
-  assert.equal(s.dirty, false);
-  s = applyKey(s, key("x"));
-  assert.equal(s.dirty, true);
-  s = markSaved(s);
-  assert.equal(s.dirty, false);
+// ── screen layout (what the user actually sees) ──
+import { renderScreen } from "../src/tui.js";
+
+const plain = (s) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+const screenOf = (state) => plain(renderScreen(state, { columns: 100, rows: 30 }));
+
+test("main menu looks like ccstatusline: title, preview box, menu, description", () => {
+  const out = screenOf(initialState(base()));
+  const lines = out.split("\n");
+  assert.match(lines[0], /^agystatusline \| v\d/);
+  assert.match(out, /╭─+╮/);
+  assert.match(out, /> Preview {2}\(ctrl\+s to save configuration at any time\)/);
+  assert.match(out, /\nMain Menu\n/);
+  assert.match(out, /▶ {2}📝 Edit Lines/);
+  assert.match(out, /🚪 Exit/);
+  assert.match(out, /Configure any number of status rows/);
 });
 
-test("s marks the session for saving without quitting", () => {
-  const s = applyKey(initialState(base()), key("s:save"));
-  assert.equal(s.saveNow, true);
-  assert.notEqual(s.done, true);
+test("the line list shows widget counts and a way back", () => {
+  const out = screenOf(applyKey(initialState(base()), { name: "return" }));
+  assert.match(out, /Select Line to Edit Items/);
+  assert.match(out, /☰ Line 1 \(2 widgets\)/);
+  assert.match(out, /☰ Line 2 \(1 widgets\)/);
+  assert.match(out, /← Back/);
 });
 
-test("q with no changes exits immediately", () => {
-  const s = applyKey(initialState(base()), key("q"));
-  assert.equal(s.done, true);
-  assert.equal(s.mode, "list");
+test("the editor numbers widgets and shows a description for the selection", () => {
+  let s = applyKey(initialState(base()), { name: "return" });
+  s = applyKey(s, { name: "return" });
+  const out = screenOf(s);
+  assert.match(out, /Edit Line 1/);
+  assert.match(out, /▶ {1,2}1\. Model/);
+  assert.match(out, / {2}2\. Git Branch/);
+  assert.match(out, /Name of the model agy is running/);
 });
 
-test("q with unsaved changes asks first", () => {
-  let s = applyKey(initialState(base()), key("x")); // delete a widget
-  s = applyKey(s, key("q"));
-  assert.equal(s.mode, "confirm");
-  assert.notEqual(s.done, true);
-  assert.equal(s.confirm, 0);
+test("the quit dialog renders its three choices", () => {
+  let s = applyKey(initialState(base()), { name: "return" });
+  s = applyKey(s, { name: "return" });
+  s = applyKey(s, { name: "d" });
+  s = applyKey(s, { name: "escape" });
+  s = applyKey(s, { name: "escape" });
+  s = applyKey(s, { name: "q" });
+  const out = screenOf(s);
+  assert.match(out, /Save changes before quitting\?/);
+  assert.match(out, /Save & Exit/);
+  assert.match(out, /Exit without saving/);
+  assert.match(out, /Cancel/);
 });
 
-test("the quit dialog can save, discard or cancel", () => {
-  const dirty = applyKey(initialState(base()), key("x"));
-
-  const saveAndExit = applyKey(applyKey(dirty, key("q")), key("return"));
-  assert.equal(saveAndExit.saveNow, true);
-  assert.equal(saveAndExit.done, true);
-
-  const discard = applyKey(applyKey(applyKey(dirty, key("q")), key("down")), key("return"));
-  assert.equal(discard.done, true);
-  assert.notEqual(discard.saveNow, true);
-
-  const cancel = applyKey(applyKey(applyKey(dirty, key("q")), key("down")), key("escape"));
-  assert.equal(cancel.mode, "list");
-  assert.notEqual(cancel.done, true);
+test("the unsaved marker shows up in the title line", () => {
+  let s = applyKey(initialState(base()), { name: "return" });
+  s = applyKey(s, { name: "return" });
+  s = applyKey(s, { name: "d" });
+  assert.match(screenOf(s).split("\n")[0], /unsaved changes/);
 });

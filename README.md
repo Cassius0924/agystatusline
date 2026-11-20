@@ -97,27 +97,62 @@ Any widget accepts `color`, `textColor`, `bgColor`, `label`, `raw` and `maxWidth
 
 ## Editor (TUI)
 
-Run it with no arguments in a terminal (or `agystatusline edit`):
+Run it with no arguments in a terminal (or `agystatusline edit`). The layout follows
+ccstatusline: a title line, a preview box, then a plain list with a `▶` cursor and a
+one-line description underneath.
 
 ```
-┌ agystatusline ──────────────────────── theme:aurora · powerline · bold:off ┐
-│ READY | Gemini 4 Argon (High) | ~/proj main | +128 −34 | NORMAL            │
-│ Ctx █░░░░░░░░░ 14% | 25% | 12345678                                        │
-├───────────────────────────────────────────────────────────────────────────┤
-│ L1 ▸ agent-state  auto        │ type    agent-state                       │
-│      separator  auto          │ colour  auto                              │
-│      model  brightBlue        │ label   —                                 │
-│      current-working-dir …    │ renders READY                             │
-├───────────────────────────────────────────────────────────────────────────┤
-│ ↑↓ move  ←→ row  J/K reorder  a add  x del  Enter colour  l label  r raw  │
-└───────────────────────────────────────────────────────────────────────────┘
+agystatusline | v0.6.0
+╭──────────────────────────────────────────────────────────────────────╮
+│ > Preview  (ctrl+s to save configuration at any time)                │
+╰──────────────────────────────────────────────────────────────────────╯
+  READY | Gemini 4 Argon (High) | ~/proj main | +128 −34 | NORMAL
+  Ctx █░░░░░░░░░ 14% | 25% | 12345678
+  72% x 1h 30m x 93% x 6d 11h
+
+Main Menu
+↑↓ select · Enter open · s save · q exit
+
+  ▶  📝 Edit Lines
+     🎨 Theme
+     ⚡ Powerline Setup
+     🌐 Global Options
+
+     📦 Install to agy
+     🚪 Exit
+
+  Configure any number of status rows with widgets like model info, git status and quota usage
 ```
 
-- Framed three-pane layout at ≥96 columns (list + detail), stacked below that; the list scrolls with the cursor.
-- `Enter`/`c` opens a **colour picker with live swatches** (`←→` choose, Enter apply — first entry returns the widget to auto).
-- `l` edits the widget **label** inline, `r` toggles raw values, `o` opens the **preset picker**, `?` shows the full key map.
-- The preview pane uses the same renderer as the live status line, so what you see is what agy draws.
-- **Saving is explicit**, like ccstatusline: edits live in memory, the header shows `unsaved changes`, `s` (or `Ctrl+S`) writes them, and quitting with unsaved edits asks *Save & Exit / Exit without saving / Cancel*. agy's next refresh picks the file up.
+Screens: **Main Menu → Edit Lines → Edit Line N**, each with its own hint line and a
+description for the selected item.
+
+```
+Edit Line 1
+↑↓ select · ←→ change type · Enter move · (a) append · (i) insert · (k) clone ·
+(d) delete · (c) clear · (r) raw · (m) merge · Esc back
+
+  ▶  1. Agent State
+     2. Separator |
+     3. Model
+     4. Custom Text ( )
+     5. Thinking Effort
+
+  Agent state: ready, working, tool use or error
+```
+
+- `Enter` starts **move mode** (arrows reorder, Enter drops); `←→` swaps the widget type.
+- `(a)` appends, `(i)` inserts after the cursor — both open the **widget picker** with
+  categories (Core / Git / Environment / Tokens / Cache / Context / Usage / Layout) and
+  type-to-search over every widget.
+- `o` opens the colour picker with live swatches, `l` edits the widget label, `r` toggles
+  raw values, `c` clears the line.
+- The preview box uses the same renderer as the live status line, so what you see is what
+  agy draws.
+- **Saving is explicit**, like ccstatusline: edits live in memory, the title line shows
+  `* unsaved changes`, `s` (or `Ctrl+S`) writes them, and quitting with unsaved edits asks
+  *Save & Exit / Exit without saving / Cancel*. agy's next refresh picks the file up.
+- `g` toggles the editor language (English / Chinese); rendered output is never translated.
 
 ## Commands
 
