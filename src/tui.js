@@ -9,7 +9,7 @@ import { WIDGETS, renderLines } from "./render.js";
 import { demoCtx } from "./demo.js";
 import { detectLang, translator, widgetName } from "./i18n.js";
 
-const VERSION = "0.6.1";
+const VERSION = "0.6.2";
 const THEMES = ["aurora", "mono", "paper", null];
 export const SWATCHES = [
   null, "brightBlue", "brightMagenta", "brightCyan", "brightGreen", "brightYellow",
@@ -53,8 +53,9 @@ const clamp = (n, max) => Math.max(0, Math.min(max, n));
 
 export const markSaved = (state) => ({ ...state, original: snapshot(state.config), dirty: false });
 
-export const initialState = (config) => ({
+export const initialState = (config, hooks = {}) => ({
   config,
+  hooks,
   original: snapshot(config),
   screen: "main", // main | lines | edit | picker | colors | label
   menuIdx: 0,
@@ -210,8 +211,8 @@ function applyKeyInner(state, key) {
         cfg.global = { ...(cfg.global ?? {}), minimalist: !cfg.global?.minimalist };
         s.status = tr("ui.msg.minimalist", tr(cfg.global.minimalist ? "ui.on" : "ui.off"));
       } else if (item === "install") {
-        s.install = true;
-        s.done = true;
+        if (state.hooks?.install) s.status = state.hooks.install();
+        else s.status = tr("ui.msg.installHint");
       } else if (item === "exit") {
         if (dirtyOf(s)) s.confirm = { choice: 0 }; else s.done = true;
       }
@@ -464,13 +465,14 @@ export function renderScreen(state, size = {}) {
   } else {
     // main menu — ccstatusline's grouping: edit, looks, then settings, then exit
     const items = menuItems(state);
-    const icon = { editLines: "\u{1F4DD}", colors: "\u{1F3A8}", powerline: "\u26A1", global: "\u{1F310}", install: "\u{1F4E6}", exit: "\u{1F6AA}" };
+    const wired = state.hooks?.isWired?.() ?? false;
+    const icon = { editLines: "\u{1F4DD}", colors: "\u{1F3A8}", powerline: "\u26A1", global: "\u{1F310}", install: wired ? "\u2705" : "\u{1F4E6}", exit: "\u{1F6AA}" };
     const name = {
       editLines: tr("ui.menu.editLines"),
       colors: tr("ui.menu.colors"),
       powerline: tr("ui.menu.powerline"),
       global: tr("ui.menu.global"),
-      install: tr("ui.menu.install"),
+      install: wired ? tr("ui.menu.wired") : tr("ui.menu.install"),
       exit: state.dirty ? tr("ui.menu.saveExit") : tr("ui.menu.exit"),
     };
     rows = items.map((item, i) => ({
@@ -525,9 +527,9 @@ export function saveConfig(path, config) {
   }
 }
 
-export function runTUI(configPath, config) {
+export function runTUI(configPath, config, hooks = {}) {
   const stdin = process.stdin;
-  let state = initialState(config);
+  let state = initialState(config, hooks);
   const tr = () => translator(detectLang(state.config));
 
   const save = () => {

@@ -102,7 +102,7 @@ ccstatusline: a title line, a preview box, then a plain list with a `▶` cursor
 one-line description underneath.
 
 ```
-agystatusline | v0.6.1
+agystatusline | v0.6.2
 ╭──────────────────────────────────────────────────────────────────────╮
 │ > Preview  (ctrl+s to save configuration at any time)                │
 ╰──────────────────────────────────────────────────────────────────────╯
@@ -153,13 +153,20 @@ Edit Line 1
   `* unsaved changes`, `s` (or `Ctrl+S`) writes them, and quitting with unsaved edits asks
   *Save & Exit / Exit without saving / Cancel*. agy's next refresh picks the file up.
 - `g` toggles the editor language (English / Chinese); rendered output is never translated.
+- **No separate install step**: the `📦 Install to agy` menu entry writes agy's
+  `~/.gemini/antigravity-cli/settings.json` in place (backup + self-check) and turns into
+  `✅ agy is wired up` once it is. `agystatusline init` does exactly the same thing for scripts.
+
+Layout config lives in `~/.config/agystatusline/settings.json` (respects `XDG_CONFIG_HOME`),
+the same split ccstatusline uses: tool config in `~/.config/ccstatusline/settings.json`,
+wiring in the host CLI's settings file.
 
 ## Commands
 
 | command | does |
 | --- | --- |
 | `agystatusline` | render from stdin (what agy calls) |
-| `agystatusline init [--force]` | write the default config + wire agy settings |
+| `agystatusline init [--force]` | write the default config + wire agy settings (optional — the editor menu does it) |
 | `agystatusline preset [default\|minimal\|powerline\|git]` | switch layout, previews it |
 | `agystatusline edit` (or no args in a TTY) | interactive editor (`s` save, `q` quit) |
 | `agystatusline config` | print the config path |

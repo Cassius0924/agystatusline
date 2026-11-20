@@ -232,3 +232,23 @@ test("the unsaved marker shows up in the title line", () => {
   s = applyKey(s, { name: "d" });
   assert.match(screenOf(s).split("\n")[0], /unsaved changes/);
 });
+
+test("the install item wires agy in place instead of asking for init", () => {
+  let called = 0;
+  const hooks = { isWired: () => false, install: () => { called += 1; return "wired ok"; } };
+  let s = initialState(base(), hooks);
+  const menu = screenOf(s);
+  assert.match(menu, /📦 Install to agy/);
+  // walk down to the install entry (5th)
+  for (let i = 0; i < 4; i += 1) s = applyKey(s, { name: "down" });
+  s = applyKey(s, { name: "return" });
+  assert.equal(called, 1);
+  assert.equal(s.done, false);
+  assert.equal(s.status, "wired ok");
+});
+
+test("once wired the item says so", () => {
+  const out = screenOf(initialState(base(), { isWired: () => true }));
+  assert.match(out, /✅ agy is wired up/);
+  assert.doesNotMatch(out, /📦 Install to agy/);
+});

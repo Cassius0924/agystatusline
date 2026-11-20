@@ -13,7 +13,7 @@ import { DEMO_PAYLOAD, DEMO_GIT, demoCtx } from "../src/demo.js";
 import { runTUI } from "../src/tui.js";
 import { PRESETS, PRESET_NAMES } from "../src/presets.js";
 
-const VERSION = "0.6.1";
+const VERSION = "0.6.2";
 const HOME = homedir();
 const CACHE_DIR = process.env.XDG_CACHE_HOME
   ? join(process.env.XDG_CACHE_HOME, "agystatusline")
@@ -186,6 +186,48 @@ function writePreset(name) {
   return 0;
 }
 
+// Wiring agy is the equivalent of ccstatusline's "Install to Claude Code":
+// one function, callable from `init` and from the editor menu alike.
+function isWired() {
+  try {
+    const settings = JSON.parse(readFileSync(AGY_SETTINGS, "utf8"));
+    return String(settings.statusLine?.command ?? "").includes("agystatusline");
+  } catch {
+    return false;
+  }
+}
+
+function installToAgy({ force = false } = {}) {
+  const settings = existsSync(AGY_SETTINGS) ? JSON.parse(readFileSync(AGY_SETTINGS, "utf8")) : {};
+  if (settings.statusLine && !force && !isWired()) {
+    return { ok: false, message: `statusLine already set: ${JSON.stringify(settings.statusLine)} — 用 init --force 覆盖` };
+  }
+  if (existsSync(AGY_SETTINGS)) copyFileSync(AGY_SETTINGS, `${AGY_SETTINGS}.agystatusline.bak`);
+
+  // Prefer the PATH-visible binary (survives npm -g upgrades); fall back to node
+  // plus this file's absolute path when running from a checkout or npx cache.
+  const bin = fileURLToPath(import.meta.url);
+  const onPath = spawnSync("sh", ["-c", "command -v agystatusline"], { encoding: "utf8" }).stdout?.trim();
+  const command = onPath || `${process.execPath} ${bin}`;
+  settings.statusLine = { type: "command", command, enabled: true };
+  mkdirSync(dirname(AGY_SETTINGS), { recursive: true });
+  writeFileSync(AGY_SETTINGS, `${JSON.stringify(settings, null, 2)}\n`);
+
+  // Prove the wiring before claiming it works.
+  const check = spawnSync("sh", ["-c", command], {
+    input: JSON.stringify(DEMO_PAYLOAD),
+    encoding: "utf8",
+    timeout: 5000,
+  });
+  const ok = check.status === 0 && Boolean(check.stdout?.trim());
+  const warn = !onPath && command.includes("_npx") ? " (npx 缓存路径；建议 npm i -g 后重跑)" : "";
+  return {
+    ok,
+    command,
+    message: ok ? `已接入 agy → ${command}${warn}` : `自检失败: exit ${check.status} ${(check.stderr ?? "").trim()}`,
+  };
+}
+
 function init(argv) {
   mkdirSync(CONFIG_DIR, { recursive: true });
   if (!existsSync(CONFIG_PATH)) {
@@ -194,41 +236,11 @@ function init(argv) {
   } else {
     console.log(`config   ${CONFIG_PATH} (kept)`);
   }
-
-  const settings = existsSync(AGY_SETTINGS) ? JSON.parse(readFileSync(AGY_SETTINGS, "utf8")) : {};
-  if (settings.statusLine && !argv.includes("--force")) {
-    console.log(`statusLine already set: ${JSON.stringify(settings.statusLine)}`);
-    console.log("re-run with --force to replace it");
-    return 1;
-  }
-  if (existsSync(AGY_SETTINGS)) copyFileSync(AGY_SETTINGS, `${AGY_SETTINGS}.agystatusline.bak`);
-
-  // Prefer the PATH-visible binary (survives npm -g upgrades); fall back to node
-  // plus this file's absolute path when running from a checkout.
-  const bin = fileURLToPath(import.meta.url);
-  const onPath = spawnSync("sh", ["-c", "command -v agystatusline"], { encoding: "utf8" }).stdout?.trim();
-  const command = onPath || `${process.execPath} ${bin}`;
-  settings.statusLine = { type: "command", command, enabled: true };
-  mkdirSync(dirname(AGY_SETTINGS), { recursive: true });
-  writeFileSync(AGY_SETTINGS, `${JSON.stringify(settings, null, 2)}\n`);
-  console.log(`wired    ${AGY_SETTINGS} -> ${command}`);
-
-  // Prove the wiring before claiming it works.
-  if (!onPath && command.includes("_npx")) {
-    console.log("warning: wired a path inside the npx cache; install with `npm i -g agystatusline` for a stable command");
-  }
-  const check = spawnSync("sh", ["-c", command], {
-    input: JSON.stringify(DEMO_PAYLOAD),
-    encoding: "utf8",
-    timeout: 5000,
-  });
-  if (check.status !== 0 || !check.stdout?.trim()) {
-    console.log(`self-check FAILED: exit ${check.status} ${(check.stderr ?? "").trim()}`);
-    return 1;
-  }
-  console.log(`self-check ok: ${check.stdout.split("\n")[0]}`);
+  const res = installToAgy({ force: argv.includes("--force") });
+  console.log(`${isWired() ? "wired   " : "status  "} ${res.message}`);
+  if (res.ok) console.log(`self-check ok: ${AGY_SETTINGS}`);
   console.log("restart agy (or open a new session) to pick it up");
-  return 0;
+  return res.ok ? 0 : 1;
 }
 
 const argv = process.argv.slice(2);
@@ -251,7 +263,13 @@ const wantsTUI =
   (!argv.includes("--demo") && !argv.includes("--version") && process.stdin.isTTY && process.stdout.isTTY);
 
 if (wantsTUI) {
-  runTUI(CONFIG_PATH, loadConfig());
+  runTUI(CONFIG_PATH, loadConfig(), {
+    isWired,
+    install: () => {
+      const res = installToAgy();
+      return res.message;
+    },
+  });
 } else {
   renderOnce();
 }
