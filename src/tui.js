@@ -10,7 +10,7 @@ import { PRESETS, PRESET_NAMES, applyPreset } from "./presets.js";
 import { demoCtx } from "./demo.js";
 import { detectLang, translator, widgetName } from "./i18n.js";
 
-const VERSION = "0.7.1";
+const VERSION = "0.8.0";
 const THEMES = ["aurora", "mono", "paper", null];
 export const SWATCHES = [
   null, "brightBlue", "brightMagenta", "brightCyan", "brightGreen", "brightYellow",
@@ -437,7 +437,8 @@ function previewBlock(state, tr, W) {
   box.push(`${DIM}\u256d${"\u2500".repeat(Math.max(0, W - 2))}\u256e${RESET}`);
   box.push(`${DIM}\u2502${RESET} ${fit(title, W - 3)}${DIM}\u2502${RESET}`);
   box.push(`${DIM}\u2570${"\u2500".repeat(Math.max(0, W - 2))}\u256f${RESET}`);
-  const preview = renderLines(cfg, demoCtx(W - 4), { color: true, width: W - 4, now: "14:05" }) || `${DIM}${tr("ui.emptyLayout")}${RESET}`;
+  const highlight = state.screen === "edit" ? { line: state.line, index: state.idx } : null;
+  const preview = renderLines(cfg, demoCtx(W - 4), { color: true, width: W - 4, now: "14:05", highlight }) || `${DIM}${tr("ui.emptyLayout")}${RESET}`;
   preview.split("\n").forEach((l) => box.push(`  ${l}`));
   return box;
 }

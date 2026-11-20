@@ -149,7 +149,7 @@ export const WIDGETS = {
   "agent-state": ({ p }) => STATE_LABEL[p.agent_state || "idle"] ?? String(p.agent_state).toUpperCase(),
   "cycle-mode": ({ p }) => p.cycle_mode ?? "",
   "vim-mode": ({ p }) => p.vim?.mode ?? "",
-  "conversation-id": ({ p }) => (p.conversation_id || "").slice(0, 8),
+  "conversation-id": ({ p }, o) => (o.metadata?.full ? p.conversation_id || "" : (p.conversation_id || "").slice(0, 8)),
   "claude-session-id": ({ p }) => (p.conversation_id || p.session_id || "").slice(0, 8), // portability alias
   title: ({ p }, o) => {
     const t = (p.conversation_title || "").replace(/\s+/g, " ").trim();
@@ -180,8 +180,15 @@ export const WIDGETS = {
   clock: ({ now }) => now ?? "",
 
   // git
-  "git-branch": ({ git }) => git.branch,
-  "git-changes": ({ git }) => git.changes,
+  "git-branch": ({ git }, o) => (git.branch ? `${o.metadata?.icon ?? ""}${git.branch}` : ""),
+  "git-changes": ({ git }, o) => {
+    if (!git.changes) return "";
+    if (!o.metadata?.paren) return git.changes;
+    // (+3,-1) style, ccstatusline's compact form
+    const add = git.insertions ?? git.changes.match(/\+(\d+)/)?.[1];
+    const del = git.deletions ?? git.changes.match(/\u2212(\d+)/)?.[1];
+    return `(+${add ? String(add).replace("+", "") : 0},-${del ? String(del).replace("\u2212", "") : 0})`;
+  },
   "git-insertions": ({ git }) => git.insertions,
   "git-deletions": ({ git }) => git.deletions,
   "git-sha": ({ git }) => git.sha,
@@ -218,9 +225,9 @@ export const WIDGETS = {
   "tokens-total": ({ p }) => humanTokens(usedTokens(p)),
   tokens: ({ p }) => humanTokens(usedTokens(p)), // alias
   "tokens-cached": ({ p }) => humanTokens(num(p.context_window?.current_usage?.cache_read_input_tokens)),
-  "cache-hit-rate": ({ p }) => {
+  "cache-hit-rate": ({ p }, o) => {
     const pct = cacheHitRate(p.context_window?.current_usage);
-    return pct === null ? "" : `${pct}%`;
+    return pct === null ? o.metadata?.whenMissing ?? "" : `${pct}%`;
   },
 
   // quota
@@ -232,8 +239,8 @@ export const WIDGETS = {
     const b = quotaBucket(p.quota, "weekly");
     return b?.remaining_fraction === undefined ? "" : `${Math.round(b.remaining_fraction * 100)}%`;
   },
-  "reset-timer": ({ p }) => duration(quotaBucket(p.quota, "5h")?.reset_in_seconds ?? null),
-  "weekly-reset-timer": ({ p }) => duration(quotaBucket(p.quota, "weekly")?.reset_in_seconds ?? null),
+  "reset-timer": ({ p }) => timer(quotaBucket(p.quota, "5h")),
+  "weekly-reset-timer": ({ p }) => timer(quotaBucket(p.quota, "weekly")),
 
   // static
   separator: (_, o) => o.character ?? "|",
@@ -244,6 +251,11 @@ export const WIDGETS = {
 };
 
 const FLEX = "\u0000flex";
+
+// Quota known but reset time not yet reported: agy briefly sends the bucket
+// without reset_in_seconds, so say "Loading" instead of dropping the segment.
+const timer = (bucket) =>
+  bucket?.reset_in_seconds !== undefined ? duration(bucket.reset_in_seconds) : bucket ? "[Loading]" : "";
 const STATIC = new Set(["separator", "flex-separator", "custom-text", "text", "symbol"]);
 
 function autoTone(type, p) {
@@ -270,10 +282,10 @@ function resolveTheme(config) {
   return THEMES[config.theme] ?? null;
 }
 
-function buildRow(line, ctx) {
+function buildRow(line, ctx, hl = -1) {
   const segs = [];
   let sep = null;
-  for (const w of line) {
+  for (const [i, w] of line.entries()) {
     const fn = WIDGETS[w.type];
     if (!fn) continue;
     const value = (fn(ctx, w) ?? "").trim();
@@ -287,6 +299,7 @@ function buildRow(line, ctx) {
       fg: w.color ?? w.textColor ?? autoTone(w.type, ctx.p) ?? null,
       bg: w.bgColor ?? w.backgroundColor ?? null,
       data: !STATIC.has(w.type),
+      hl: i === hl,
     });
   }
   return segs;
@@ -304,7 +317,7 @@ function renderPlain(segs, { color, width, theme }) {
     const len = visibleLength(glue) + visibleLength(s.text);
     // No room left: drop the rest of the row instead of wrapping mid-widget.
     if (!hasFlex && width > 0 && parts.length && used + len > width) break;
-    parts.push({ text: s.text, glue, len, fg: s.fg });
+    parts.push({ text: s.text, glue, len, fg: s.fg, hl: s.hl });
     used += len;
     sep = null;
   }
@@ -312,10 +325,13 @@ function renderPlain(segs, { color, width, theme }) {
     const fixed = parts.filter((p) => !p.flex).reduce((a, p) => a + p.len, 0);
     const flexCount = parts.filter((p) => p.flex).length;
     const fill = " ".repeat(Math.max(1, Math.floor(((width || 80) - fixed) / flexCount)));
-    return parts.map((p) => (p.flex ? fill : `${p.glue}${paint(p.text, p.fg, color, theme)}`)).join("").trimEnd();
+    return parts.map((p) => (p.flex ? fill : `${p.glue}${mark(paint(p.text, p.fg, color, theme), p.hl, color)}`)).join("").trimEnd();
   }
-  return parts.map((p) => `${p.glue}${paint(p.text, p.fg, color, theme)}`).join("").trimEnd();
+  return parts.map((p) => `${p.glue}${mark(paint(p.text, p.fg, color, theme), p.hl, color)}`).join("").trimEnd();
 }
+
+// Editor preview only: underline the segment being edited. Off for the real bar.
+const mark = (text, on, color) => (on && color ? `\x1b[4m${text}\x1b[24m` : text);
 
 function renderPowerline(rows, pl, theme, { color, width, padLeft, padRight }) {
   const glyph = typeof pl.separators?.[0] === "string" ? pl.separators[0] : "\uE0B0";
@@ -396,7 +412,7 @@ function paintCells(cells, { color, theme, pl, glyph }) {
  * Render the configured rows.
  * Options: color (bool), width (terminal columns), now (clock string).
  */
-export function renderLines(config, ctx, { color = true, width = 0, now = null } = {}) {
+export function renderLines(config, ctx, { color = true, width = 0, now = null, highlight = null } = {}) {
   const theme = resolveTheme(config);
   const g = config.global ?? {};
   const pl = config.powerline ?? {};
@@ -406,8 +422,8 @@ export function renderLines(config, ctx, { color = true, width = 0, now = null }
   const c = { ...ctx, now: ctx.now ?? now };
 
   const rows = [];
-  for (const line of config.lines ?? []) {
-    const segs = buildRow(line, c);
+  for (const [rowIndex, line] of (config.lines ?? []).entries()) {
+    const segs = buildRow(line, c, highlight?.line === rowIndex ? highlight.index : -1);
     if (!segs.some((s) => s.data)) continue; // a row with no live data is noise
     rows.push(segs);
   }

@@ -365,3 +365,18 @@ test("the theme screen previews colours before Enter", () => {
   assert.notEqual(aurora, mono);
   assert.ok(mono.includes("\x1b[97m") || mono.includes("\x1b[37m"), "mono paints brightWhite/white");
 });
+
+test("the editor preview underlines the widget being edited", () => {
+  let s = applyKey(initialState(base()), { name: "return" });
+  const listScreen = renderScreen(s, { columns: 100, rows: 30 });
+  assert.ok(!listScreen.includes("\x1b[4m"), "no highlight before entering the editor");
+
+  s = applyKey(s, { name: "return" }); // edit line 1, widget 0 (model)
+  const first = renderScreen(s, { columns: 100, rows: 30 });
+  assert.match(first, /\x1b\[4m(\x1b\[[0-9;]+m)?Gemini 4 Argon \(High\)/);
+
+  s = applyKey(s, { name: "down" }); // git-branch
+  const second = renderScreen(s, { columns: 100, rows: 30 });
+  assert.match(second, /\x1b\[4m(\x1b\[[0-9;]+m)?main/);
+  assert.doesNotMatch(second, /\x1b\[4m(\x1b\[[0-9;]+m)?Gemini/);
+});
