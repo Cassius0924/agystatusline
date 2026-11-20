@@ -11,9 +11,9 @@ import { fileURLToPath } from "node:url";
 import { renderLines } from "../src/render.js";
 import { DEMO_PAYLOAD, DEMO_GIT, demoCtx } from "../src/demo.js";
 import { runTUI } from "../src/tui.js";
-import { PRESETS, PRESET_NAMES } from "../src/presets.js";
+import { PRESETS, PRESET_NAMES, applyPreset } from "../src/presets.js";
 
-const VERSION = "0.7.0";
+const VERSION = "0.7.1";
 const HOME = homedir();
 const CACHE_DIR = process.env.XDG_CACHE_HOME
   ? join(process.env.XDG_CACHE_HOME, "agystatusline")
@@ -177,7 +177,9 @@ function writePreset(name) {
     console.log(`unknown preset. available: ${PRESET_NAMES.join(", ")}`);
     return 1;
   }
-  const config = { version: 1, gitCacheTtlSeconds: 5, ...PRESETS[name] };
+  // Merge into the existing config: language, theme and cache settings must
+  // survive a preset switch.
+  const config = applyPreset(loadConfig(), PRESETS[name]);
   mkdirSync(CONFIG_DIR, { recursive: true });
   writeFileSync(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
   const ctx = demoCtx(120);

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,4 +62,22 @@ test("--demo renders without stdin", () => {
   const out = run(["--demo"]);
   assert.match(out, /Gemini 4 Argon \(High\)/);
   assert.match(out, /main/);
+});
+
+test("switching preset keeps language, theme and cache settings", () => {
+  const cfg = JSON.stringify({ version: 1, language: "zh", theme: "paper", gitCacheTtlSeconds: 9, lines: [[{ type: "model" }]] });
+  const dir = mkdtempSync(join(tmpdir(), "agsl-"));
+  const cfgDir = join(dir, "config", "agystatusline");
+  mkdirSync(cfgDir, { recursive: true });
+  writeFileSync(join(cfgDir, "settings.json"), cfg);
+  execFileSync(process.execPath, [BIN, "preset", "compact"], {
+    encoding: "utf8",
+    env: { ...process.env, NO_COLOR: "1", XDG_CONFIG_HOME: join(dir, "config"), XDG_CACHE_HOME: join(dir, "cache") },
+  });
+  const after = JSON.parse(readFileSync(join(cfgDir, "settings.json"), "utf8"));
+  assert.equal(after.language, "zh");
+  assert.equal(after.theme, "paper");
+  assert.equal(after.gitCacheTtlSeconds, 9);
+  assert.equal(after.lines.length, 1);
+  assert.ok(after.lines[0].some((w) => w.type === "context-percentage"));
 });

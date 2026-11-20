@@ -10,7 +10,7 @@ import { PRESETS, PRESET_NAMES, applyPreset } from "./presets.js";
 import { demoCtx } from "./demo.js";
 import { detectLang, translator, widgetName } from "./i18n.js";
 
-const VERSION = "0.7.0";
+const VERSION = "0.7.1";
 const THEMES = ["aurora", "mono", "paper", null];
 export const SWATCHES = [
   null, "brightBlue", "brightMagenta", "brightCyan", "brightGreen", "brightYellow",
@@ -462,6 +462,7 @@ export function renderScreen(state, size = {}) {
   let hint2 = "";
   let rows = [];
   let desc = tr("ui.mainHint");
+  let dirtyNote = "";
 
   if (state.screen === "lines") {
     title = tr("ui.selectLine");
@@ -539,14 +540,13 @@ export function renderScreen(state, size = {}) {
     // main menu — ccstatusline's grouping: edit, looks, then settings, then exit
     const items = menuItems(state);
     const wired = state.hooks?.isWired?.() ?? false;
-    const icon = { editLines: "\u{1F4DD}", colors: "\u{1F3A8}", presets: "\u{1F9E9}", powerline: "\u26A1", install: wired ? "\u2705" : "\u{1F4E6}", exit: "\u{1F6AA}" };
+    const icon = { editLines: "\u{1F4DD}", colors: "\u{1F3A8}", presets: "\u{1F9E9}", powerline: "\u26A1", install: wired ? "\u{1F50C}" : "\u{1F4E6}", exit: "\u{1F6AA}" };
     const name = {
       editLines: tr("ui.menu.editLines"),
       colors: tr("ui.menu.colors"),
       presets: tr("ui.menu.presets"),
       powerline: tr("ui.menu.powerline"),
-      global: tr("ui.menu.global"),
-      install: wired ? tr("ui.menu.wired") : tr("ui.menu.install"),
+      install: tr("ui.menu.install"),
       exit: state.dirty ? tr("ui.menu.saveExit") : tr("ui.menu.exit"),
     };
     rows = items.map((item, i) => ({
@@ -554,7 +554,17 @@ export function renderScreen(state, size = {}) {
       active: i === state.menuIdx,
       gapBefore: item.key === "install",
     }));
-    desc = state.dirty ? tr("ui.confirm.title") : tr("ui.mainHint");
+    const key = items[state.menuIdx].key;
+    const wiredLine = wired ? tr("ui.menu.wiredDesc") : tr("ui.menu.installDesc");
+    desc = {
+      editLines: tr("ui.desc.editLines"),
+      colors: tr("ui.desc.colors"),
+      presets: tr("ui.desc.presets"),
+      powerline: tr("ui.desc.powerline"),
+      install: wiredLine,
+      exit: state.dirty ? tr("ui.confirm.title") : tr("ui.desc.exit"),
+    }[key];
+    dirtyNote = state.dirty ? `* ${tr("ui.unsaved")} — ${tr("ui.help.save")}` : "";
   }
 
   out.push(`${BOLD}${title}${RESET}`);
@@ -575,6 +585,7 @@ export function renderScreen(state, size = {}) {
 
   out.push("");
   out.push(`  ${DIM}${desc}${RESET}`);
+  if (dirtyNote) out.push(`  ${DIM}${dirtyNote}${RESET}`);
   if (state.status) out.push(`  ${GREEN}${state.status}${RESET}`);
 
   if (state.confirm) {

@@ -191,7 +191,7 @@ test("main menu looks like ccstatusline: title, preview box, menu, description",
   assert.match(out, /\nMain Menu\n/);
   assert.match(out, /▶ {2}📝 Edit Lines/);
   assert.match(out, /🚪 Exit/);
-  assert.match(out, /Configure any number of status rows/);
+  assert.match(out, /Add, remove and reorder widgets/);
 });
 
 test("the line list shows widget counts and a way back", () => {
@@ -247,10 +247,16 @@ test("the install item wires agy in place instead of asking for init", () => {
   assert.equal(s.status, "wired ok");
 });
 
-test("once wired the item says so", () => {
-  const out = screenOf(initialState(base(), { isWired: () => true }));
-  assert.match(out, /✅ agy is wired up/);
-  assert.doesNotMatch(out, /📦 Install to agy/);
+test("the wiring row reports its state in the description, not as a stray line", () => {
+  let s = initialState(base(), { isWired: () => true });
+  s = applyKey(s, { name: "down" });
+  s = applyKey(s, { name: "down" });
+  s = applyKey(s, { name: "down" });
+  s = applyKey(s, { name: "down" });
+  assert.match(screenOf(s), /agy already points at this tool/);
+
+  const fresh = initialState(base(), { isWired: () => false });
+  assert.match(screenOf(fresh), /📦 Install to agy/);
 });
 
 test("a taken statusLine opens an in-editor overwrite dialog", () => {
