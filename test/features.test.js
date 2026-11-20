@@ -74,9 +74,14 @@ test("powerline aligns equal columns across rows", () => {
   assert.equal(a.indexOf("Pro"), b.indexOf("Pro"));
 });
 
-test("minimalist mode drops labels and custom text stays", () => {
-  const cfg = { global: { minimalist: true }, lines: [[{ type: "model", label: "Model" }, { type: "separator" }, { type: "agent-state" }]] };
-  assert.equal(renderLines(cfg, ctx(), { color: false }), "Gemini 4 Argon (High) | READY");
+test("a theme recolours explicit named colours, not just slots", () => {
+  const cfg = { theme: "mono", lines: [[{ type: "model", color: "brightBlue" }]] };
+  const aurora = { theme: "aurora", lines: [[{ type: "model", color: "brightBlue" }]] };
+  const plain = renderLines(cfg, ctx(), { color: true });
+  const neon = renderLines(aurora, ctx(), { color: true });
+  assert.ok(plain.includes("\x1b[97m"), "mono turns brightBlue into brightWhite");
+  assert.ok(neon.includes("\x1b[96m"), "aurora turns brightBlue into brightCyan");
+  assert.notEqual(plain, neon);
 });
 
 test("theme slots resolve to their palette colour", () => {

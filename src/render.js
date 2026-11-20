@@ -8,11 +8,36 @@ const COLORS = {
   brightBlue: 94, brightMagenta: 95, brightCyan: 96, brightWhite: 97,
 };
 
-// Semantic slots a widget can name instead of a literal colour: `color: "git"`.
+// A theme has two layers: `slots` maps semantic names a widget may use
+// (`color: "git"`) to a base colour, and `palette` remaps the named colours
+// themselves so switching themes visibly recolours a config that hard-codes
+// `brightBlue`/`magenta`/….
 const THEMES = {
-  mono: { model: "brightWhite", git: "white", meta: "brightBlack", ok: "green", warn: "yellow", bad: "red" },
-  aurora: { model: "brightBlue", git: "brightMagenta", meta: "brightBlack", ok: "brightGreen", warn: "brightYellow", bad: "brightRed" },
-  paper: { model: "blue", git: "magenta", meta: "brightBlack", ok: "green", warn: "yellow", bad: "red" },
+  mono: {
+    slots: { model: "brightWhite", git: "white", meta: "brightBlack", ok: "white", warn: "white", bad: "white" },
+    palette: {
+      black: "black", red: "white", green: "white", yellow: "white", blue: "white", magenta: "white", cyan: "white",
+      white: "white", brightBlack: "brightBlack", brightRed: "brightWhite", brightGreen: "brightWhite",
+      brightYellow: "brightWhite", brightBlue: "brightWhite", brightMagenta: "brightWhite", brightCyan: "brightWhite",
+      brightWhite: "brightWhite", "#ffffff": "brightWhite",
+    },
+  },
+  aurora: {
+    slots: { model: "brightCyan", git: "brightMagenta", meta: "brightBlack", ok: "brightGreen", warn: "brightYellow", bad: "brightRed" },
+    palette: {
+      blue: "cyan", brightBlue: "brightCyan", magenta: "magenta", brightMagenta: "brightMagenta",
+      cyan: "green", brightCyan: "brightCyan", green: "brightGreen", brightGreen: "brightGreen",
+      yellow: "brightYellow", brightYellow: "brightYellow", red: "brightRed", brightRed: "brightRed",
+    },
+  },
+  paper: {
+    slots: { model: "blue", git: "magenta", meta: "brightBlack", ok: "green", warn: "yellow", bad: "red" },
+    palette: {
+      blue: "#1f4e79", brightBlue: "#1f4e79", magenta: "#7a3e9d", brightMagenta: "#7a3e9d",
+      cyan: "#0f6b5c", brightCyan: "#0f6b5c", green: "#2f6b2f", brightGreen: "#2f6b2f",
+      yellow: "#8a6d00", brightYellow: "#8a6d00", red: "#a13b3b", brightRed: "#a13b3b",
+    },
+  },
 };
 
 const BASE_SLOTS = { model: "brightBlue", git: "brightMagenta", meta: "brightBlack", ok: "green", warn: "yellow", bad: "red" };
@@ -22,7 +47,10 @@ const rgb = (hex) => {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
-const slot = (color, theme) => theme?.[color] ?? BASE_SLOTS[color] ?? color;
+const slot = (color, theme) => {
+  const named = theme?.slots?.[color] ?? theme?.[color] ?? BASE_SLOTS[color] ?? color;
+  return theme?.palette?.[named] ?? named;
+};
 
 function fgCode(color, theme) {
   const c = slot(color, theme);
@@ -113,7 +141,11 @@ const STATE_TONE = {
 export const WIDGETS = {
   // session
   model: ({ p }) => p.model?.display_name ?? p.model?.id ?? "",
-  "thinking-effort": ({ p }) => p.model?.effort ?? "",
+  "thinking-effort": ({ p }) => {
+    const effort = p.model?.effort ?? "";
+    // agy already prints "Gemini 4 Argon (High)"; repeating "high" is noise.
+    return effort && !String(p.model?.display_name ?? "").toLowerCase().includes(effort.toLowerCase()) ? effort : "";
+  },
   "agent-state": ({ p }) => STATE_LABEL[p.agent_state || "idle"] ?? String(p.agent_state).toUpperCase(),
   "cycle-mode": ({ p }) => p.cycle_mode ?? "",
   "vim-mode": ({ p }) => p.vim?.mode ?? "",
@@ -238,7 +270,7 @@ function resolveTheme(config) {
   return THEMES[config.theme] ?? null;
 }
 
-function buildRow(line, ctx, { minimal }) {
+function buildRow(line, ctx) {
   const segs = [];
   let sep = null;
   for (const w of line) {
@@ -249,7 +281,7 @@ function buildRow(line, ctx, { minimal }) {
     if (w.type === "separator") { sep = value; continue; }
     if (w.type === "flex-separator") { segs.push({ flex: true }); continue; }
     if (sep !== null && segs.length) { segs.push({ text: sep, sep: true }); sep = null; }
-    const text = w.label && !minimal && !w.raw ? `${w.label} ${value}` : value;
+    const text = w.label && !w.raw ? `${w.label} ${value}` : value;
     segs.push({
       text,
       fg: w.color ?? w.textColor ?? autoTone(w.type, ctx.p) ?? null,
@@ -371,12 +403,11 @@ export function renderLines(config, ctx, { color = true, width = 0, now = null }
   const pad = g.padding ?? "both";
   const padLeft = pad === "both" || pad === "left" ? " " : "";
   const padRight = pad === "both" || pad === "right" ? " " : "";
-  const minimal = g.minimalist === true;
   const c = { ...ctx, now: ctx.now ?? now };
 
   const rows = [];
   for (const line of config.lines ?? []) {
-    const segs = buildRow(line, c, { minimal });
+    const segs = buildRow(line, c);
     if (!segs.some((s) => s.data)) continue; // a row with no live data is noise
     rows.push(segs);
   }

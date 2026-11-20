@@ -1,6 +1,6 @@
 {
   "name": "@cassius0924/agystatusline",
-  "version": "0.6.4",
+  "version": "0.7.0",
   "description": "Configurable status line for the Antigravity CLI (agy): widgets, colours, powerline blocks and multi-line layouts in settings.json.",
   "keywords": [
     "agy",

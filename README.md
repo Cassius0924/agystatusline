@@ -8,7 +8,7 @@ Configurable status line for the [Antigravity CLI](https://antigravity.google/do
 
 ```bash
 npx -y @cassius0924/agystatusline init          # writes the config + wires agy's statusLine
-npx -y @cassius0924/agystatusline preset powerline   # or: default | minimal | git
+npx -y @cassius0924/agystatusline preset compact     # or: default | standard | minimal | full | powerline | git
 ```
 
 > Behind a registry mirror (npmmirror, corporate proxy)? The mirror's `latest` tag can lag behind npm by minutes to hours, so `npx` may install an older version. Either wait for the sync or bypass the mirror for this command:
@@ -37,7 +37,7 @@ One Node process per refresh, ~50 ms including startup.
   "version": 1,
   "gitCacheTtlSeconds": 5,
   "theme": "aurora",
-  "global": { "padding": "both", "bold": false, "minimalist": false, "inheritColors": false },
+  "global": { "padding": "both", "bold": false, "inheritColors": false },
   "powerline": { "enabled": false, "separators": ["\ue0b0"], "endCap": "\ue0b4", "autoAlign": true },
   "lines": [
     [
@@ -57,9 +57,8 @@ One Node process per refresh, ~50 ms including startup.
 | --- | --- |
 | `global.padding` | `both` / `left` / `right` / `none` — block padding in powerline mode |
 | `global.bold` | bold every value |
-| `global.minimalist` | drop labels / decorations, values only |
 | `global.inheritColors` | separators take the colour of the value before them |
-| `theme` | `mono` / `aurora` / `paper`, or an object mapping slots (`model`, `git`, `meta`, `ok`, `warn`, `bad`) to colours |
+| `theme` | `mono` / `aurora` / `paper`, or an object mapping slots (`model`, `git`, `meta`, `ok`, `warn`, `bad`) to colours. A theme remaps the named colours too, so it recolours configs that hard-code `brightBlue`/`magenta`/… |
 | `language` | `en` (default) / `zh` — UI and widget wording |
 | `powerline.enabled` | draw blocks with background colours instead of plain text |
 | `powerline.separators` | glyph used between blocks (default `\ue0b0`) |
@@ -125,7 +124,18 @@ Main Menu
 ```
 
 Screens: **Main Menu → Edit Lines → Edit Line N**, each with its own hint line and a
-description for the selected item.
+description for the selected item. **Preset layouts** and **Theme** preview the highlighted
+choice in the box above before you press Enter.
+
+| preset | shape |
+| --- | --- |
+| `default` | three rows: status+title+model+cwd+branch+changes, context row, quota row |
+| `compact` | one row, state → title → model → branch → changes → context |
+| `standard` | two rows: the working line, then context + 5h/weekly quota |
+| `minimal` | one row: model + context percentage |
+| `full` | three rows with everything agy reports, incl. tokens, cost, host RAM and clock |
+| `powerline` | coloured blocks with caps (needs a Nerd Font) |
+| `git` | two rows of repo detail (divergence, staged/unstaged/untracked, sha) |
 
 ```
 Edit Line 1
@@ -169,7 +179,7 @@ wiring in the host CLI's settings file.
 | --- | --- |
 | `agystatusline` | render from stdin (what agy calls) |
 | `agystatusline init [--force]` | write the default config + wire agy settings (optional — the editor menu does it) |
-| `agystatusline preset [default\|minimal\|powerline\|git]` | switch layout, previews it |
+| `agystatusline preset [default\|compact\|standard\|minimal\|full\|powerline\|git]` | switch layout, previews it |
 | `agystatusline edit` (or no args in a TTY) | interactive editor (`s` save, `q` quit) |
 | `agystatusline config` | print the config path |
 | `agystatusline --demo` | render a sample payload |
@@ -185,7 +195,7 @@ wiring in the host CLI's settings file.
 
 ## Compared with ccstatusline
 
-Ported: multi-row widget config, the `ccstatusline` widget vocabulary, per-widget colours/labels, themes/gradients-in-theme-slots, powerline blocks with caps and column alignment, flex separator, minimalist mode, git cache TTL, reset timers, cache-hit-rate, the interactive `preset` previews, and a renderer with no dependencies.
+Ported: multi-row widget config, the `ccstatusline` widget vocabulary, per-widget colours/labels, themes/gradients-in-theme-slots, powerline blocks with caps and column alignment, flex separator, git cache TTL, reset timers, cache-hit-rate, the interactive `preset` previews, and a renderer with no dependencies.
 
 Not portable (agy's payload has no data for it): Claude usage API widgets (session/weekly per-model, spend limits, block forecasts), PR/CI widgets, transcript-derived metrics (output speed, cache misses, compaction), hook-driven widgets. Not implemented: per-widget gradients and per-project configs.
 

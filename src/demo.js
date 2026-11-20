@@ -2,6 +2,7 @@
 export const DEMO_PAYLOAD = {
   cwd: "/home/you/proj",
   conversation_id: "12345678-abcd-ef01-2345-6789abcdef01",
+  cost: { total_usd: 0.42 },
   conversation_title: "Fix the config loader",
   model: { id: "gemini-4-argon-high", display_name: "Gemini 4 Argon (High)", effort: "high" },
   workspace: { current_dir: "/home/you/proj", project_dir: "/home/you/proj" },

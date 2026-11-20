@@ -63,7 +63,7 @@ const ctx = (p = PAYLOAD) => ({ p, home: "/root", git: { branch: p.vcs?.branch ?
 test("renders three plain lines without colour", () => {
   const lines = renderLines(CONFIG, ctx(), { color: false }).split("\n");
   assert.equal(lines.length, 3);
-  assert.equal(lines[0], "Gemini 4 Argon (High) high | ~/proj | feat/x | NORMAL");
+  assert.equal(lines[0], "Gemini 4 Argon (High) | ~/proj | feat/x | NORMAL");
   assert.equal(lines[1], "Ctx \u2588\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591 14% | 25% | 12345678");
   assert.equal(lines[2], "72% x 1h 30m x 93% x 6d 11h");
 });

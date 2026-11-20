@@ -34,7 +34,7 @@ const PAYLOAD = JSON.stringify({
 
 test("renders the default layout", () => {
   const out = run([], { stdin: PAYLOAD });
-  assert.match(out, /Gemini 4 Argon \(High\) high/);
+  assert.match(out, /Gemini 4 Argon \(High\)/);
   assert.match(out, /Ctx .*14%/);
   assert.match(out, /72% x 1h 30m/);
 });

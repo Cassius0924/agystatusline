@@ -6,10 +6,11 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { emitKeypressEvents } from "node:readline";
 import { WIDGETS, renderLines } from "./render.js";
+import { PRESETS, PRESET_NAMES, applyPreset } from "./presets.js";
 import { demoCtx } from "./demo.js";
 import { detectLang, translator, widgetName } from "./i18n.js";
 
-const VERSION = "0.6.4";
+const VERSION = "0.7.0";
 const THEMES = ["aurora", "mono", "paper", null];
 export const SWATCHES = [
   null, "brightBlue", "brightMagenta", "brightCyan", "brightGreen", "brightYellow",
@@ -67,6 +68,7 @@ export const initialState = (config, hooks = {}) => ({
   pickStage: "cat", // cat | type
   search: "",
   colorIdx: 0,
+  presetIdx: 0,
   input: "",
   confirm: null, // { choice: 0 save & exit | 1 discard | 2 cancel }
   status: "",
@@ -75,7 +77,7 @@ export const initialState = (config, hooks = {}) => ({
   dirty: false,
 });
 
-const MENU = ["editLines", "colors", "powerline", "global", "install", "exit"];
+const MENU = ["editLines", "colors", "presets", "powerline", "install", "exit"];
 
 function menuItems(s) {
   const items = MENU.map((key) => ({ key }));
@@ -151,7 +153,7 @@ function applyKeyInner(state, key) {
     return s;
   }
 
-  if (key.name === "s:save" && ["main", "lines", "edit", "themes"].includes(s.screen)) {
+  if (key.name === "s:save" && ["main", "lines", "edit", "themes", "presets"].includes(s.screen)) {
     s.saveNow = true;
     return s;
   }
@@ -212,6 +214,9 @@ function applyKeyInner(state, key) {
       else if (item === "colors") {
         s.screen = "themes";
         s.themeIdx = Math.max(0, THEMES.indexOf(cfg.theme ?? null));
+      } else if (item === "presets") {
+        s.screen = "presets";
+        s.presetIdx = 0;
       } else if (item === "powerline") {
         cfg.powerline = { ...(cfg.powerline ?? {}), enabled: !cfg.powerline?.enabled };
         if (cfg.powerline.enabled && !cfg.powerline.separators) {
@@ -220,9 +225,6 @@ function applyKeyInner(state, key) {
           cfg.powerline.autoAlign = true;
         }
         s.status = tr("ui.msg.powerline", tr(cfg.powerline.enabled ? "ui.on" : "ui.off"));
-      } else if (item === "global") {
-        cfg.global = { ...(cfg.global ?? {}), minimalist: !cfg.global?.minimalist };
-        s.status = tr("ui.msg.minimalist", tr(cfg.global.minimalist ? "ui.on" : "ui.off"));
       } else if (item === "install") {
         if (state.hooks?.install) {
           const res = state.hooks.install({});
@@ -233,6 +235,21 @@ function applyKeyInner(state, key) {
         if (dirtyOf(s)) s.confirm = { kind: "quit", choice: 0 }; else s.done = true;
       }
     }
+    return s;
+  }
+
+  // ── preset layouts ──
+  if (s.screen === "presets") {
+    if (key.name === "up" || key.name === "k") s.presetIdx = clamp(s.presetIdx - 1, PRESET_NAMES.length - 1);
+    else if (key.name === "down" || key.name === "j") s.presetIdx = clamp(s.presetIdx + 1, PRESET_NAMES.length - 1);
+    else if (key.name === "return") {
+      const name = PRESET_NAMES[s.presetIdx];
+      s.config = applyPreset(cfg, PRESETS[name]);
+      s.line = 0;
+      s.idx = 0;
+      s.status = tr("ui.msg.preset", name);
+      s.screen = "main";
+    } else if (key.name === "escape" || key.name === "q") s.screen = "main";
     return s;
   }
 
@@ -406,7 +423,15 @@ const widgetTitle = (lang, w) => {
 };
 
 function previewBlock(state, tr, W) {
-  const cfg = state.config;
+  // While browsing presets/themes the preview follows the cursor, so the choice
+  // is visible before Enter is pressed.
+  let cfg = state.config;
+  if (state.screen === "presets") {
+    cfg = { ...cfg, ...PRESETS[PRESET_NAMES[state.presetIdx]] };
+  } else if (state.screen === "themes") {
+    const theme = THEMES[state.themeIdx];
+    cfg = theme ? { ...cfg, theme } : { ...cfg, theme: undefined };
+  }
   const box = [];
   const title = tr("ui.previewLabel");
   box.push(`${DIM}\u256d${"\u2500".repeat(Math.max(0, W - 2))}\u256e${RESET}`);
@@ -477,6 +502,14 @@ export function renderScreen(state, size = {}) {
       const key = `desc.${list[state.pickIdx]}`;
       desc = tr(key) === key ? tr("ui.widgetDesc", label(lang, list[state.pickIdx])) : tr(key);
     } else desc = tr("ui.searchAll");
+  } else if (state.screen === "presets") {
+    title = tr("ui.presets");
+    hint1 = tr("ui.presetsKeys");
+    rows = PRESET_NAMES.map((name, i) => ({
+      text: `${i === state.presetIdx ? `${CYAN}\u25b6${RESET}` : " "}  ${tr(`ui.preset.${name}`)}`,
+      active: i === state.presetIdx,
+    }));
+    desc = "";
   } else if (state.screen === "themes") {
     title = tr("ui.themes");
     hint1 = tr("ui.themesKeys");
@@ -506,10 +539,11 @@ export function renderScreen(state, size = {}) {
     // main menu — ccstatusline's grouping: edit, looks, then settings, then exit
     const items = menuItems(state);
     const wired = state.hooks?.isWired?.() ?? false;
-    const icon = { editLines: "\u{1F4DD}", colors: "\u{1F3A8}", powerline: "\u26A1", global: "\u{1F310}", install: wired ? "\u2705" : "\u{1F4E6}", exit: "\u{1F6AA}" };
+    const icon = { editLines: "\u{1F4DD}", colors: "\u{1F3A8}", presets: "\u{1F9E9}", powerline: "\u26A1", install: wired ? "\u2705" : "\u{1F4E6}", exit: "\u{1F6AA}" };
     const name = {
       editLines: tr("ui.menu.editLines"),
       colors: tr("ui.menu.colors"),
+      presets: tr("ui.menu.presets"),
       powerline: tr("ui.menu.powerline"),
       global: tr("ui.menu.global"),
       install: wired ? tr("ui.menu.wired") : tr("ui.menu.install"),

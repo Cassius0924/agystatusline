@@ -333,3 +333,29 @@ test("a search with no hits says so, and an empty line explains itself", () => {
   empty = applyKey(empty, { name: "return" });
   assert.match(screenOf(empty), /empty line/);
 });
+
+test("the preset screen previews the highlighted layout before Enter", () => {
+  // cursor starts on `default` (three rows), move to `compact` (one row)
+  let s = applyKey(applyKey(initialState(base()), { name: "down" }), { name: "down" });
+  s = applyKey(s, { name: "return" });
+  assert.equal(s.screen, "presets");
+  const one = plain(renderScreen(s, { columns: 100, rows: 30 }));
+  s = applyKey(s, { name: "down" }); // compact
+  const two = plain(renderScreen(s, { columns: 100, rows: 30 }));
+  assert.notEqual(one, two, "the preview changes with the cursor");
+  s = applyKey(s, { name: "return" });
+  assert.equal(s.screen, "main");
+  assert.equal(s.config.lines.length, 1);
+  assert.match(s.status, /compact/);
+});
+
+test("the theme screen previews colours before Enter", () => {
+  let s = applyKey(initialState(base()), { name: "down" });
+  s = applyKey(s, { name: "return" });
+  const aurora = renderScreen(s, { columns: 100, rows: 30 });
+  s = applyKey(s, { name: "up" }); // paper
+  s = applyKey(s, { name: "up" }); // mono
+  const mono = renderScreen(s, { columns: 100, rows: 30 });
+  assert.notEqual(aurora, mono);
+  assert.ok(mono.includes("\x1b[97m") || mono.includes("\x1b[37m"), "mono paints brightWhite/white");
+});
