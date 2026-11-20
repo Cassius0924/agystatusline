@@ -9,6 +9,8 @@ export const PRESETS = {
       [
         { type: "agent-state" },
         { type: "separator" },
+        { type: "title" },
+        { type: "separator" },
         { type: "model", color: "brightBlue" },
         { type: "custom-text", customText: " " },
         { type: "thinking-effort", color: "brightBlue" },
