@@ -12,8 +12,9 @@ import { renderLines } from "../src/render.js";
 import { DEMO_PAYLOAD, DEMO_GIT, demoCtx } from "../src/demo.js";
 import { runTUI } from "../src/tui.js";
 import { PRESETS, PRESET_NAMES, applyPreset } from "../src/presets.js";
+import { buildCommand } from "../src/install.js";
 
-const VERSION = "0.8.2";
+const VERSION = "0.8.3";
 const HOME = homedir();
 const CACHE_DIR = process.env.XDG_CACHE_HOME
   ? join(process.env.XDG_CACHE_HOME, "agystatusline")
@@ -190,6 +191,21 @@ function writePreset(name) {
 
 // Wiring agy is the equivalent of ccstatusline's "Install to Claude Code":
 // one function, callable from `init` and from the editor menu alike.
+// `command -v` on POSIX, `where` on Windows; null when not installed globally.
+function findOnPath() {
+  try {
+    if (process.platform === "win32") {
+      const out = spawnSync("where", ["agystatusline"], { encoding: "utf8" });
+      if (out.status !== 0) return null;
+      return out.stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)[0] ?? null;
+    }
+    const out = spawnSync("sh", ["-c", "command -v agystatusline"], { encoding: "utf8" });
+    return out.stdout?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 function isWired() {
   try {
     const settings = JSON.parse(readFileSync(AGY_SETTINGS, "utf8"));
@@ -208,16 +224,18 @@ function installToAgy({ force = false } = {}) {
   if (existsSync(AGY_SETTINGS)) copyFileSync(AGY_SETTINGS, `${AGY_SETTINGS}.agystatusline.bak`);
 
   // Prefer the PATH-visible binary (survives npm -g upgrades); fall back to node
-  // plus this file's absolute path when running from a checkout or npx cache.
+  // plus this file's absolute path. Windows has no `sh`/`command -v`, and its
+  // paths contain spaces, so both discovery and quoting differ.
   const bin = fileURLToPath(import.meta.url);
-  const onPath = spawnSync("sh", ["-c", "command -v agystatusline"], { encoding: "utf8" }).stdout?.trim();
-  const command = onPath || `${process.execPath} ${bin}`;
+  const onPath = findOnPath();
+  const command = buildCommand({ onPath, execPath: process.execPath, scriptPath: bin });
   settings.statusLine = { type: "command", command, enabled: true };
   mkdirSync(dirname(AGY_SETTINGS), { recursive: true });
   writeFileSync(AGY_SETTINGS, `${JSON.stringify(settings, null, 2)}\n`);
 
-  // Prove the wiring before claiming it works.
-  const check = spawnSync("sh", ["-c", command], {
+  // Prove the tool runs before claiming the wiring works. Spawning node + the
+  // script directly avoids depending on the shell (and on Windows .cmd shims).
+  const check = spawnSync(process.execPath, [bin], {
     input: JSON.stringify(DEMO_PAYLOAD),
     encoding: "utf8",
     timeout: 5000,
@@ -227,7 +245,9 @@ function installToAgy({ force = false } = {}) {
   return {
     ok,
     command,
-    message: ok ? `已接入 agy → ${command}${warn}（重开 agy 会话生效）` : `自检失败: exit ${check.status} ${(check.stderr ?? "").trim()}`,
+    message: ok
+      ? `已接入 agy → ${command}${warn}（重开 agy 会话生效）`
+      : `自检失败: ${check.error?.message ?? `exit ${check.status}`} ${(check.stderr ?? "").trim()}`.trim(),
   };
 }
 

@@ -10,7 +10,7 @@ import { PRESETS, PRESET_NAMES, applyPreset } from "./presets.js";
 import { demoCtx } from "./demo.js";
 import { detectLang, translator, widgetName } from "./i18n.js";
 
-const VERSION = "0.8.2";
+const VERSION = "0.8.3";
 const THEMES = ["aurora", "mono", "paper", null];
 export const SWATCHES = [
   null, "brightBlue", "brightMagenta", "brightCyan", "brightGreen", "brightYellow",
@@ -121,6 +121,7 @@ function applyKeyInner(state, key) {
         if (s.confirm.choice === 0) {
           const res = s.hooks?.install?.({ force: true });
           s.status = res?.message ?? "";
+          s.statusBad = res?.ok === false;
         }
         s.confirm = null;
       } else if (s.confirm.choice === 0) { s.saveNow = true; s.done = true; s.confirm = null; }
@@ -232,7 +233,7 @@ function applyKeyInner(state, key) {
         if (state.hooks?.install) {
           const res = state.hooks.install({});
           if (res?.conflict) s.confirm = { kind: "install", command: res.conflict, choice: 0 };
-          else s.status = res?.message ?? "";
+          else { s.status = res?.message ?? ""; s.statusBad = res?.ok === false; }
         } else s.status = tr("ui.msg.installHint");
       } else if (item === "exit") {
         if (dirtyOf(s)) s.confirm = { kind: "quit", choice: 0 }; else s.done = true;
@@ -373,6 +374,7 @@ const BOLD = esc(1);
 const DIM = esc(90);
 const CYAN = esc(36);
 const GREEN = esc(32);
+const RED = esc(31);
 const INVERSE = esc(7);
 const CLEAR = "\x1b[2J\x1b[H";
 const HIDE = "\x1b[?25l";
@@ -601,7 +603,7 @@ export function renderScreen(state, size = {}) {
   out.push("");
   out.push(`  ${DIM}${desc}${RESET}`);
   if (dirtyNote) out.push(`  ${DIM}${dirtyNote}${RESET}`);
-  if (state.status) out.push(`  ${GREEN}${state.status}${RESET}`);
+  if (state.status) out.push(`  ${state.statusBad ? RED : GREEN}${state.status}${RESET}`);
 
   if (state.confirm) {
     const isInstall = state.confirm.kind === "install";
