@@ -116,9 +116,14 @@ function bar(pct, cells = 10) {
   return "\u2588".repeat(filled) + "\u2591".repeat(cells - filled);
 }
 
-function abbrevHome(dir, home) {
+export function abbrevHome(dir, home, platform = process.platform) {
   if (!dir) return "";
-  return home && dir.startsWith(home) ? `~${dir.slice(home.length)}` : dir;
+  if (!home) return dir;
+  // Windows paths are case-insensitive and may carry a trailing separator.
+  const same = (a, b) => (platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b);
+  const base = home.replace(/[\\/]+$/, "");
+  const head = dir.slice(0, base.length);
+  return same(head, base) ? `~${dir.slice(base.length)}` : dir;
 }
 
 const usedTokens = (p) => {
@@ -227,7 +232,10 @@ export const WIDGETS = {
   "tokens-cached": ({ p }) => humanTokens(num(p.context_window?.current_usage?.cache_read_input_tokens)),
   "cache-hit-rate": ({ p }, o) => {
     const pct = cacheHitRate(p.context_window?.current_usage);
-    return pct === null ? o.metadata?.whenMissing ?? "" : `${pct}%`;
+    if (pct !== null) return `${pct}%`;
+    // "n/a" is only honest when agy is actually reporting a context window;
+    // with an empty payload the whole row should disappear instead.
+    return p.context_window ? o.metadata?.whenMissing ?? "" : "";
   },
 
   // quota

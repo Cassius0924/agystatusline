@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { renderLines } from "../src/render.js";
+import { PRESETS } from "../src/presets.js";
 
 const P = {
   conversation_id: "12345678-abcd",
@@ -92,4 +93,11 @@ test("theme slots resolve to their palette colour", () => {
 test("custom theme object overrides the built-in palettes", () => {
   const cfg = { theme: { git: "#ff0000" }, lines: [[{ type: "git-branch", color: "git" }]] };
   assert.ok(renderLines(cfg, ctx(), { color: true }).includes("\x1b[38;2;255;0;0m"));
+});
+
+test("an empty payload does not leave a row of placeholders", () => {
+  const out = renderLines(PRESETS.default, ctx({ p: {} }), { color: false });
+  assert.equal(out.split("\n").length, 1, "only the row that still has real data survives");
+  assert.doesNotMatch(out, /Cache Hit/);
+  assert.doesNotMatch(out, /n\/a/);
 });

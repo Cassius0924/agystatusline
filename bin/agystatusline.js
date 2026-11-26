@@ -6,15 +6,16 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync, copyFileSync, existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderLines } from "../src/render.js";
 import { DEMO_PAYLOAD, DEMO_GIT, demoCtx } from "../src/demo.js";
 import { runTUI } from "../src/tui.js";
 import { PRESETS, PRESET_NAMES, applyPreset } from "../src/presets.js";
 import { buildCommand } from "../src/install.js";
+import { memoryPercent } from "../src/memory.js";
 
-const VERSION = "0.8.3";
+const VERSION = "0.8.4";
 const HOME = homedir();
 const CACHE_DIR = process.env.XDG_CACHE_HOME
   ? join(process.env.XDG_CACHE_HOME, "agystatusline")
@@ -68,7 +69,7 @@ function gitInfo(p, need, ttl) {
   const info = { branch: p?.vcs?.branch || "", changes: "", sha: "" };
   const run = (args) => {
     try {
-      return spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", timeout: 300 }).stdout?.trim() ?? "";
+      return spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", timeout: 800 }).stdout?.trim() ?? "";
     } catch {
       return "";
     }
@@ -81,8 +82,11 @@ function gitInfo(p, need, ttl) {
       // .git file with "gitdir: …" pointing at the real git directory.
       const isDir = statSync(dotGit).isDirectory();
       const head = isDir ? readFileSync(join(dotGit, "HEAD"), "utf8").trim() : readFileSync(dotGit, "utf8").trim();
-      const ref = head.match(/^gitdir:\s*(.+)$/)?.[1];
-      const real = ref ? readFileSync(join(dir, ref, "HEAD"), "utf8").trim() : head;
+      // Windows may write CRLF here, and a worktree's gitdir can be absolute.
+      const ref = head.replace(/\r/g, "").match(/^gitdir:\s*(.+)$/)?.[1];
+      const real = ref
+        ? readFileSync(join(isAbsolute(ref) ? "" : dir, ref, "HEAD"), "utf8").trim()
+        : head;
       if (real.startsWith("ref: refs/heads/")) info.branch = real.slice("ref: refs/heads/".length);
     } catch {
       /* not a repo */
@@ -116,7 +120,7 @@ function gitInfo(p, need, ttl) {
     const ahead = Number(ab[1]) || 0;
     if (ahead || behind) info.aheadBehind = `${ahead ? `\u21e13${ahead}` : ""}${behind ? ` \u21e3${behind}` : ""}`.trim();
   }
-  if (need.has("git-root")) info.root = run(["rev-parse", "--show-toplevel"]).split("/").pop() ?? "";
+  if (need.has("git-root")) info.root = run(["rev-parse", "--show-toplevel"]).split(/[\\/]/).pop() ?? "";
   if (need.has("git-origin")) {
     const url = run(["remote", "get-url", "origin"]);
     const m = url.match(/[/:]([^/:]+)\/([^/]+?)(?:\.git)?$/);
@@ -138,22 +142,10 @@ function render(payload, { color }) {
     width: Number(payload?.terminal_width) || 0,
     mem: need.has("memory") ? memoryPercent() : null,
     now: need.has("clock")
-      ? new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      ? new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
       : null,
   };
   return renderLines(config, ctx, { color, width: ctx.width });
-}
-
-// Used memory share, Linux only; elsewhere the widget just hides.
-function memoryPercent() {
-  try {
-    const info = readFileSync("/proc/meminfo", "utf8");
-    const total = Number(info.match(/MemTotal:\s+(\d+)/)?.[1]);
-    const avail = Number(info.match(/MemAvailable:\s+(\d+)/)?.[1]);
-    return total && avail ? Math.round((1 - avail / total) * 100) : null;
-  } catch {
-    return null;
-  }
 }
 
 function readStdin() {
