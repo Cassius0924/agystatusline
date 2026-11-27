@@ -15,7 +15,7 @@ import { PRESETS, PRESET_NAMES, applyPreset } from "../src/presets.js";
 import { buildCommand } from "../src/install.js";
 import { memoryPercent } from "../src/memory.js";
 
-const VERSION = "0.8.4";
+const VERSION = "0.8.5";
 const HOME = homedir();
 const CACHE_DIR = process.env.XDG_CACHE_HOME
   ? join(process.env.XDG_CACHE_HOME, "agystatusline")
@@ -209,9 +209,12 @@ function isWired() {
 
 function installToAgy({ force = false } = {}) {
   const settings = existsSync(AGY_SETTINGS) ? JSON.parse(readFileSync(AGY_SETTINGS, "utf8")) : {};
-  if (settings.statusLine && !force && !isWired()) {
-    const current = String(settings.statusLine.command ?? JSON.stringify(settings.statusLine));
-    return { ok: false, conflict: current, message: `statusLine 已被占用: ${current}` };
+  // An existing statusLine only blocks us when it actually runs something and
+  // is not already ours: a leftover `{"command": ""}` is dead config, not a
+  // conflict, and must not strand the user on a message they cannot act on.
+  const existing = String(settings.statusLine?.command ?? "").trim();
+  if (settings.statusLine && !force && !isWired() && existing) {
+    return { ok: false, conflict: existing, message: `statusLine 已被占用: ${existing}` };
   }
   if (existsSync(AGY_SETTINGS)) copyFileSync(AGY_SETTINGS, `${AGY_SETTINGS}.agystatusline.bak`);
 

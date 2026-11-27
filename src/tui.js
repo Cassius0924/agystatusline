@@ -10,7 +10,7 @@ import { PRESETS, PRESET_NAMES, applyPreset } from "./presets.js";
 import { demoCtx } from "./demo.js";
 import { detectLang, translator, widgetName } from "./i18n.js";
 
-const VERSION = "0.8.4";
+const VERSION = "0.8.5";
 const THEMES = ["aurora", "mono", "paper", null];
 export const SWATCHES = [
   null, "brightBlue", "brightMagenta", "brightCyan", "brightGreen", "brightYellow",
@@ -232,7 +232,7 @@ function applyKeyInner(state, key) {
       } else if (item === "install") {
         if (state.hooks?.install) {
           const res = state.hooks.install({});
-          if (res?.conflict) s.confirm = { kind: "install", command: res.conflict, choice: 0 };
+          if (res && res.conflict !== undefined) s.confirm = { kind: "install", command: res.conflict || tr("ui.emptyValue"), choice: 0 };
           else { s.status = res?.message ?? ""; s.statusBad = res?.ok === false; }
         } else s.status = tr("ui.msg.installHint");
       } else if (item === "exit") {

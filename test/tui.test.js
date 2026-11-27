@@ -416,3 +416,12 @@ test("e edits a separator character and refuses on widgets without text", () => 
   assert.equal(t.screen, "edit");
   assert.match(screenOf(t), /no editable text/);
 });
+
+test("even an empty recorded command still gets the overwrite dialog", () => {
+  const hooks = { isWired: () => false, install: () => ({ ok: false, conflict: "", message: "taken" }) };
+  let s = initialState(base(), hooks);
+  for (let i = 0; i < 4; i += 1) s = applyKey(s, { name: "down" });
+  s = applyKey(s, { name: "return" });
+  assert.equal(s.confirm.kind, "install");
+  assert.match(screenOf(s), /\(empty\)/);
+});
